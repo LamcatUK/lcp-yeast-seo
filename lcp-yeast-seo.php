@@ -18,6 +18,7 @@ define( 'LCP_YEAST_SEO_VERSION', '0.2.0' );
 
 require_once LCP_YEAST_SEO_PATH . 'inc/settings.php';
 require_once LCP_YEAST_SEO_PATH . 'inc/post-meta.php';
+require_once LCP_YEAST_SEO_PATH . 'inc/admin-columns.php';
 require_once LCP_YEAST_SEO_PATH . 'inc/sitemaps.php';
 require_once LCP_YEAST_SEO_PATH . 'inc/schema.php';
 
