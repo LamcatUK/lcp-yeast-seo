@@ -1,25 +1,25 @@
-.components-modal__frame.cbp-yeast-seo-modal {
+.components-modal__frame.lcp-yeast-seo-modal {
   width: min(1080px, calc(100vw - 48px));
   max-width: 1080px;
   min-height: min(760px, calc(100vh - 48px));
 }
 
-.cbp-yeast-seo-layout {
+.lcp-yeast-seo-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.95fr);
   gap: 24px;
   align-items: start;
 }
 
-.cbp-yeast-seo-main .components-panel__body + .components-panel__body {
+.lcp-yeast-seo-main .components-panel__body + .components-panel__body {
   margin-top: 12px;
 }
 
-.cbp-yeast-seo-main .components-base-control {
+.lcp-yeast-seo-main .components-base-control {
   margin-bottom: 16px;
 }
 
-.cbp-yeast-seo-status-row {
+.lcp-yeast-seo-status-row {
   display: flex;
   align-items: center;
   justify-content: stretch;
@@ -27,26 +27,26 @@
   width: 100%;
 }
 
-.cbp-yeast-seo-status-button.components-button {
+.lcp-yeast-seo-status-button.components-button {
   width: 100%;
   justify-content: center;
   min-height: 36px;
   font-weight: 600;
 }
 
-.cbp-yeast-seo-count {
+.lcp-yeast-seo-count {
   margin: -10px 0 16px;
   color: #50575e;
   font-size: 12px;
 }
 
-.cbp-yeast-seo-image-actions {
+.lcp-yeast-seo-image-actions {
   display: flex;
   gap: 10px;
   margin: -4px 0 12px;
 }
 
-.cbp-yeast-seo-image-preview {
+.lcp-yeast-seo-image-preview {
   display: block;
   max-width: 100%;
   max-height: 160px;
@@ -56,7 +56,7 @@
   object-fit: cover;
 }
 
-.cbp-yeast-seo-preview {
+.lcp-yeast-seo-preview {
   position: sticky;
   top: 0;
   padding: 18px;
@@ -65,7 +65,7 @@
   background: linear-gradient(180deg, #fbfbfc 0%, #f6f7f7 100%);
 }
 
-.cbp-yeast-seo-preview-label {
+.lcp-yeast-seo-preview-label {
   margin: 0 0 12px;
   font-size: 12px;
   font-weight: 600;
@@ -74,7 +74,7 @@
   color: #3858e9;
 }
 
-.cbp-yeast-seo-serp {
+.lcp-yeast-seo-serp {
   padding: 18px;
   border-radius: 10px;
   background: #fff;
@@ -82,7 +82,7 @@
   margin-bottom: 16px;
 }
 
-.cbp-yeast-seo-serp-url {
+.lcp-yeast-seo-serp-url {
   margin-bottom: 6px;
   font-size: 14px;
   line-height: 1.4;
@@ -90,7 +90,7 @@
   word-break: break-word;
 }
 
-.cbp-yeast-seo-serp-title {
+.lcp-yeast-seo-serp-title {
   margin-bottom: 6px;
   font-size: 22px;
   line-height: 1.3;
@@ -98,25 +98,25 @@
   word-break: break-word;
 }
 
-.cbp-yeast-seo-serp-description {
+.lcp-yeast-seo-serp-description {
   font-size: 14px;
   line-height: 1.5;
   color: #4d5156;
   word-break: break-word;
 }
 
-.cbp-yeast-seo-guidance {
+.lcp-yeast-seo-guidance {
   margin-bottom: 16px;
   font-size: 13px;
   line-height: 1.5;
   color: #50575e;
 }
 
-.cbp-yeast-seo-guidance p {
+.lcp-yeast-seo-guidance p {
   margin: 0 0 8px;
 }
 
-.cbp-yeast-seo-social-card {
+.lcp-yeast-seo-social-card {
   overflow: hidden;
   border: 1px solid #dcdcde;
   border-radius: 10px;
@@ -125,7 +125,7 @@
   margin-bottom: 16px;
 }
 
-.cbp-yeast-seo-social-image {
+.lcp-yeast-seo-social-image {
   display: block;
   width: 100%;
   aspect-ratio: 1.91 / 1;
@@ -133,11 +133,11 @@
   background: #f0f0f1;
 }
 
-.cbp-yeast-seo-social-copy {
+.lcp-yeast-seo-social-copy {
   padding: 14px 16px 16px;
 }
 
-.cbp-yeast-seo-social-site {
+.lcp-yeast-seo-social-site {
   margin-bottom: 6px;
   font-size: 12px;
   line-height: 1.4;
@@ -145,7 +145,7 @@
   word-break: break-word;
 }
 
-.cbp-yeast-seo-social-title {
+.lcp-yeast-seo-social-title {
   margin-bottom: 6px;
   font-size: 16px;
   line-height: 1.35;
@@ -154,30 +154,30 @@
   word-break: break-word;
 }
 
-.cbp-yeast-seo-social-description {
+.lcp-yeast-seo-social-description {
   font-size: 13px;
   line-height: 1.5;
   color: #50575e;
   word-break: break-word;
 }
 
-.cbp-yeast-seo-schema-field textarea,
-textarea.cbp-yeast-seo-schema-field {
+.lcp-yeast-seo-schema-field textarea,
+textarea.lcp-yeast-seo-schema-field {
   font-family: SFMono-Regular, Consolas, Monaco, monospace;
   min-height: 320px;
 }
 
 @media (max-width: 900px) {
-  .components-modal__frame.cbp-yeast-seo-modal {
+  .components-modal__frame.lcp-yeast-seo-modal {
     width: calc(100vw - 24px);
     min-height: calc(100vh - 24px);
   }
 
-  .cbp-yeast-seo-layout {
+  .lcp-yeast-seo-layout {
     grid-template-columns: 1fr;
   }
 
-  .cbp-yeast-seo-preview {
+  .lcp-yeast-seo-preview {
     position: static;
   }
 }

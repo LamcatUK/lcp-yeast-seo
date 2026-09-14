@@ -1,5 +1,5 @@
 (function (wp) {
-  if (!wp || !wp.editPost || !wp.plugins || !window.cbpYeastSeoEditor) {
+  if (!wp || !wp.editPost || !wp.plugins || !window.lcpYeastSeoEditor) {
     return;
   }
 
@@ -19,7 +19,7 @@
   var TextareaControl = wp.components.TextareaControl;
   var useSelect = wp.data.useSelect;
   var useDispatch = wp.data.useDispatch;
-  var settings = window.cbpYeastSeoEditor;
+  var settings = window.lcpYeastSeoEditor;
 
   function countText(value) {
     return (value || "").trim().length;
@@ -29,19 +29,19 @@
     if (0 === count) {
       return __(
         "Empty - plugin falls back to the default output.",
-        "cbp-yeast-seo",
+        "lcp-yeast-seo",
       );
     }
 
     if (count < min) {
-      return __("A bit short.", "cbp-yeast-seo");
+      return __("A bit short.", "lcp-yeast-seo");
     }
 
     if (count > max) {
-      return __("A bit long.", "cbp-yeast-seo");
+      return __("A bit long.", "lcp-yeast-seo");
     }
 
-    return __("Good length.", "cbp-yeast-seo");
+    return __("Good length.", "lcp-yeast-seo");
   }
 
   function previewUrl(permalink, slug) {
@@ -67,7 +67,7 @@
     }
 
     var frame = wp.media({
-      title: __("Choose image", "cbp-yeast-seo"),
+      title: __("Choose image", "lcp-yeast-seo"),
       multiple: false,
       library: {
         type: "image",
@@ -91,7 +91,7 @@
   function ImageField(props) {
     return el(
       "div",
-      { className: "cbp-yeast-seo-image-field" },
+      { className: "lcp-yeast-seo-image-field" },
       el(TextControl, {
         label: props.label,
         value: props.value,
@@ -100,7 +100,7 @@
       }),
       el(
         "div",
-        { className: "cbp-yeast-seo-image-actions" },
+        { className: "lcp-yeast-seo-image-actions" },
         el(
           Button,
           {
@@ -109,7 +109,7 @@
               openMediaFrame(props.onChange);
             },
           },
-          __("Choose image", "cbp-yeast-seo"),
+          __("Choose image", "lcp-yeast-seo"),
         ),
         props.value &&
           el(
@@ -120,12 +120,12 @@
                 props.onChange("");
               },
             },
-            __("Clear", "cbp-yeast-seo"),
+            __("Clear", "lcp-yeast-seo"),
           ),
       ),
       props.value &&
         el("img", {
-          className: "cbp-yeast-seo-image-preview",
+          className: "lcp-yeast-seo-image-preview",
           src: props.value,
           alt: "",
         }),
@@ -179,12 +179,12 @@
     var descriptionCount = countText(description);
     var resolvedUrl = previewUrl(postData.permalink, postData.slug);
     var previewTitle =
-      title || postData.postTitle || __("(No title yet)", "cbp-yeast-seo");
+      title || postData.postTitle || __("(No title yet)", "lcp-yeast-seo");
     var previewDescription =
       description ||
       __(
         "Your meta description will appear here when set. Leave it blank to keep the default output.",
-        "cbp-yeast-seo",
+        "lcp-yeast-seo",
       );
     var previewOgTitle = ogTitle || previewTitle;
     var previewOgDescription = ogDescription || previewDescription;
@@ -200,7 +200,7 @@
           icon: "search",
           onClick: openModal,
         },
-        __("Yeast SEO", "cbp-yeast-seo"),
+        __("Yeast SEO", "lcp-yeast-seo"),
       ),
       PluginPostStatusInfo &&
         el(
@@ -208,16 +208,16 @@
           null,
           el(
             "div",
-            { className: "cbp-yeast-seo-status-row" },
+            { className: "lcp-yeast-seo-status-row" },
             el(
               Button,
               {
                 variant: "primary",
                 size: "compact",
-                className: "cbp-yeast-seo-status-button",
+                className: "lcp-yeast-seo-status-button",
                 onClick: openModal,
               },
-              __("Yeast SEO", "cbp-yeast-seo"),
+              __("Yeast SEO", "lcp-yeast-seo"),
             ),
           ),
         ),
@@ -225,31 +225,31 @@
         el(
           Modal,
           {
-            title: __("Yeast SEO", "cbp-yeast-seo"),
-            className: "cbp-yeast-seo-modal",
+            title: __("Yeast SEO", "lcp-yeast-seo"),
+            className: "lcp-yeast-seo-modal",
             onRequestClose: function () {
               setIsOpen(false);
             },
           },
           el(
             "div",
-            { className: "cbp-yeast-seo-layout" },
+            { className: "lcp-yeast-seo-layout" },
             el(
               "div",
-              { className: "cbp-yeast-seo-main" },
+              { className: "lcp-yeast-seo-main" },
               !settings.blogPublic &&
                 el(
                   Notice,
                   { status: "warning", isDismissible: false },
                   __(
                     "WordPress is set to discourage search engines.",
-                    "cbp-yeast-seo",
+                    "lcp-yeast-seo",
                   ),
                 ),
               el(
                 PanelBody,
                 {
-                  title: __("Search appearance", "cbp-yeast-seo"),
+                  title: __("Search appearance", "lcp-yeast-seo"),
                   initialOpen: true,
                   opened: isSearchOpen,
                   onToggle: function () {
@@ -257,53 +257,53 @@
                   },
                 },
                 el(TextControl, {
-                  label: __("Page title", "cbp-yeast-seo"),
+                  label: __("Page title", "lcp-yeast-seo"),
                   value: title,
                   onChange: function (value) {
                     updateMeta(settings.metaKeys.title, value);
                   },
                   help: __(
                     "Overrides the browser title and Yoast title for this page only.",
-                    "cbp-yeast-seo",
+                    "lcp-yeast-seo",
                   ),
                 }),
                 el(
                   "p",
-                  { className: "cbp-yeast-seo-count" },
+                  { className: "lcp-yeast-seo-count" },
                   titleCount + " characters - " + guidance(titleCount, 30, 60),
                 ),
                 el(TextareaControl, {
-                  label: __("Meta description", "cbp-yeast-seo"),
+                  label: __("Meta description", "lcp-yeast-seo"),
                   value: description,
                   onChange: function (value) {
                     updateMeta(settings.metaKeys.description, value);
                   },
                   help: __(
                     "Used for the page meta description. Leave blank to keep the default output.",
-                    "cbp-yeast-seo",
+                    "lcp-yeast-seo",
                   ),
                   rows: 5,
                 }),
                 el(
                   "p",
-                  { className: "cbp-yeast-seo-count" },
+                  { className: "lcp-yeast-seo-count" },
                   descriptionCount +
                     " characters - " +
                     guidance(descriptionCount, 70, 160),
                 ),
                 el(SelectControl, {
-                  label: __("Indexing", "cbp-yeast-seo"),
+                  label: __("Indexing", "lcp-yeast-seo"),
                   value: robotsIndex,
                   onChange: function (value) {
                     updateMeta(settings.metaKeys.robotsIndex, value);
                   },
                   help: __(
                     "Defaults to index. The global WordPress privacy setting can still force noindex.",
-                    "cbp-yeast-seo",
+                    "lcp-yeast-seo",
                   ),
                   options: [
-                    { label: __("Index", "cbp-yeast-seo"), value: "index" },
-                    { label: __("Noindex", "cbp-yeast-seo"), value: "noindex" },
+                    { label: __("Index", "lcp-yeast-seo"), value: "index" },
+                    { label: __("Noindex", "lcp-yeast-seo"), value: "noindex" },
                   ],
                 }),
               ),
@@ -311,27 +311,27 @@
                 el(
                   PanelBody,
                   {
-                    title: __("Schema (JSON-LD)", "cbp-yeast-seo"),
+                    title: __("Schema (JSON-LD)", "lcp-yeast-seo"),
                     initialOpen: false,
                   },
                   el(TextareaControl, {
-                    label: __("Schema markup", "cbp-yeast-seo"),
+                    label: __("Schema markup", "lcp-yeast-seo"),
                     value: schema,
                     onChange: function (value) {
                       updateMeta(settings.metaKeys.schema, value);
                     },
                     help: __(
                       "One JSON object, or an array/@graph of objects. Saving with a problem is allowed; check the post-save notice.",
-                      "cbp-yeast-seo",
+                      "lcp-yeast-seo",
                     ),
                     rows: 16,
-                    className: "cbp-yeast-seo-schema-field",
+                    className: "lcp-yeast-seo-schema-field",
                   }),
                 ),
               el(
                 PanelBody,
                 {
-                  title: __("Social sharing", "cbp-yeast-seo"),
+                  title: __("Social sharing", "lcp-yeast-seo"),
                   initialOpen: false,
                   opened: isSocialOpen,
                   onToggle: function () {
@@ -339,80 +339,80 @@
                   },
                 },
                 el(TextControl, {
-                  label: __("Open Graph title", "cbp-yeast-seo"),
+                  label: __("Open Graph title", "lcp-yeast-seo"),
                   value: ogTitle,
                   onChange: function (value) {
                     updateMeta(settings.metaKeys.ogTitle, value);
                   },
                   help: __(
                     "Optional override for link previews. Falls back to the page title.",
-                    "cbp-yeast-seo",
+                    "lcp-yeast-seo",
                   ),
                 }),
                 el(TextareaControl, {
-                  label: __("Open Graph description", "cbp-yeast-seo"),
+                  label: __("Open Graph description", "lcp-yeast-seo"),
                   value: ogDescription,
                   onChange: function (value) {
                     updateMeta(settings.metaKeys.ogDescription, value);
                   },
                   help: __(
                     "Optional override for social snippets. Falls back to the meta description.",
-                    "cbp-yeast-seo",
+                    "lcp-yeast-seo",
                   ),
                   rows: 4,
                 }),
                 el(ImageField, {
-                  label: __("Open Graph image", "cbp-yeast-seo"),
+                  label: __("Open Graph image", "lcp-yeast-seo"),
                   value: ogImage,
                   onChange: function (value) {
                     updateMeta(settings.metaKeys.ogImage, value);
                   },
                   help: __(
                     "Optional link-preview image. Falls back to the site-wide default social image.",
-                    "cbp-yeast-seo",
+                    "lcp-yeast-seo",
                   ),
                 }),
                 el(ImageField, {
-                  label: __("Twitter/X image", "cbp-yeast-seo"),
+                  label: __("Twitter/X image", "lcp-yeast-seo"),
                   value: twitterImage,
                   onChange: function (value) {
                     updateMeta(settings.metaKeys.twitterImage, value);
                   },
                   help: __(
                     "Optional Twitter/X-specific image. Falls back to the Open Graph image.",
-                    "cbp-yeast-seo",
+                    "lcp-yeast-seo",
                   ),
                 }),
               ),
             ),
             el(
               "aside",
-              { className: "cbp-yeast-seo-preview" },
+              { className: "lcp-yeast-seo-preview" },
               isSearchOpen &&
                 el(
                   Fragment,
                   null,
                   el(
                     "p",
-                    { className: "cbp-yeast-seo-preview-label" },
-                    __("Search preview", "cbp-yeast-seo"),
+                    { className: "lcp-yeast-seo-preview-label" },
+                    __("Search preview", "lcp-yeast-seo"),
                   ),
                   el(
                     "div",
-                    { className: "cbp-yeast-seo-serp" },
+                    { className: "lcp-yeast-seo-serp" },
                     el(
                       "div",
-                      { className: "cbp-yeast-seo-serp-url" },
+                      { className: "lcp-yeast-seo-serp-url" },
                       resolvedUrl,
                     ),
                     el(
                       "div",
-                      { className: "cbp-yeast-seo-serp-title" },
+                      { className: "lcp-yeast-seo-serp-title" },
                       previewTitle,
                     ),
                     el(
                       "div",
-                      { className: "cbp-yeast-seo-serp-description" },
+                      { className: "lcp-yeast-seo-serp-description" },
                       previewDescription,
                     ),
                   ),
@@ -423,34 +423,34 @@
                   null,
                   el(
                     "p",
-                    { className: "cbp-yeast-seo-preview-label" },
-                    __("Social preview", "cbp-yeast-seo"),
+                    { className: "lcp-yeast-seo-preview-label" },
+                    __("Social preview", "lcp-yeast-seo"),
                   ),
                   el(
                     "div",
-                    { className: "cbp-yeast-seo-social-card" },
+                    { className: "lcp-yeast-seo-social-card" },
                     previewImage &&
                       el("img", {
-                        className: "cbp-yeast-seo-social-image",
+                        className: "lcp-yeast-seo-social-image",
                         src: previewImage,
                         alt: "",
                       }),
                     el(
                       "div",
-                      { className: "cbp-yeast-seo-social-copy" },
+                      { className: "lcp-yeast-seo-social-copy" },
                       el(
                         "div",
-                        { className: "cbp-yeast-seo-social-site" },
+                        { className: "lcp-yeast-seo-social-site" },
                         resolvedUrl,
                       ),
                       el(
                         "div",
-                        { className: "cbp-yeast-seo-social-title" },
+                        { className: "lcp-yeast-seo-social-title" },
                         previewOgTitle,
                       ),
                       el(
                         "div",
-                        { className: "cbp-yeast-seo-social-description" },
+                        { className: "lcp-yeast-seo-social-description" },
                         previewOgDescription,
                       ),
                     ),
@@ -458,13 +458,13 @@
                 ),
               el(
                 "div",
-                { className: "cbp-yeast-seo-guidance" },
+                { className: "lcp-yeast-seo-guidance" },
                 el(
                   "p",
                   null,
                   __(
                     "Targets: title 30-60 characters, description 70-160 characters.",
-                    "cbp-yeast-seo",
+                    "lcp-yeast-seo",
                   ),
                 ),
                 el(
@@ -472,7 +472,7 @@
                   null,
                   __(
                     "Leave title and description blank to keep the normal page output; leave social image fields blank to fall back to the site-wide default image.",
-                    "cbp-yeast-seo",
+                    "lcp-yeast-seo",
                   ),
                 ),
               ),
@@ -484,7 +484,7 @@
                     setIsOpen(false);
                   },
                 },
-                __("Close", "cbp-yeast-seo"),
+                __("Close", "lcp-yeast-seo"),
               ),
             ),
           ),
@@ -492,7 +492,7 @@
     );
   }
 
-  registerPlugin("cbp-yeast-seo", {
+  registerPlugin("lcp-yeast-seo", {
     render: YeastSeoModal,
     icon: "search",
   });
