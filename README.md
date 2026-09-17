@@ -32,6 +32,10 @@ one feature at a time.
 - Overrides or outputs Open Graph, Twitter card, and robots meta using the
   same per-post fields, while still honouring WordPress's global
   **Discourage search engines from indexing this site** setting.
+- Outputs a `<link rel="canonical">` for non-singular views (the posts
+  page, taxonomy/post-type/author archives) — WordPress core only ever
+  outputs one for singular content, so anything else was left without a
+  canonical entirely when Yoast isn't active to fill the gap.
 - Generates a Yoast-style XML sitemap index at `sitemap_index.xml`, with
   separate post-type sitemap files including custom post types, and settings
   to enable/disable sitemap output per post type.
