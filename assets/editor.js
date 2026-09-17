@@ -174,6 +174,7 @@
     var ogImage = postData.meta[settings.metaKeys.ogImage] || "";
     var twitterImage = postData.meta[settings.metaKeys.twitterImage] || "";
     var robotsIndex = postData.meta[settings.metaKeys.robotsIndex] || "index";
+    var canonicalUrl = postData.meta[settings.metaKeys.canonicalUrl] || "";
     var schema = postData.meta[settings.metaKeys.schema] || "";
     var titleCount = countText(title);
     var descriptionCount = countText(description);
@@ -305,6 +306,18 @@
                     { label: __("Index", "lcp-yeast-seo"), value: "index" },
                     { label: __("Noindex", "lcp-yeast-seo"), value: "noindex" },
                   ],
+                }),
+                el(TextControl, {
+                  label: __("Canonical URL", "lcp-yeast-seo"),
+                  type: "url",
+                  value: canonicalUrl,
+                  onChange: function (value) {
+                    updateMeta(settings.metaKeys.canonicalUrl, value);
+                  },
+                  help: __(
+                    "Optional. Overrides the canonical link tag for this page only. Leave blank to keep the default (this page's own URL).",
+                    "lcp-yeast-seo",
+                  ),
                 }),
               ),
               settings.schemaEnabled &&
