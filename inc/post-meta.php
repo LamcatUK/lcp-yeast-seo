@@ -15,6 +15,7 @@ define( 'LCP_YEAST_SEO_OG_DESCRIPTION_META_KEY', 'lcp_yeast_seo_og_description' 
 define( 'LCP_YEAST_SEO_OG_IMAGE_META_KEY', 'lcp_yeast_seo_og_image' );
 define( 'LCP_YEAST_SEO_TWITTER_IMAGE_META_KEY', 'lcp_yeast_seo_twitter_image' );
 define( 'LCP_YEAST_SEO_ROBOTS_META_KEY', 'lcp_yeast_seo_robots_index' );
+define( 'LCP_YEAST_SEO_CANONICAL_META_KEY', 'lcp_yeast_seo_canonical_url' );
 
 /**
  * Returns the post types this plugin attaches to.
@@ -90,6 +91,13 @@ function lcp_yeast_seo_register_meta() {
 			'default'           => 'index',
 			'show_in_rest'      => true,
 			'sanitize_callback' => 'lcp_yeast_seo_sanitize_robots_meta',
+		),
+		LCP_YEAST_SEO_CANONICAL_META_KEY     => array(
+			'type'              => 'string',
+			'single'            => true,
+			'default'           => '',
+			'show_in_rest'      => true,
+			'sanitize_callback' => 'esc_url_raw',
 		),
 		LCP_YEAST_SEO_SCHEMA_META_KEY        => array(
 			'type'              => 'string',
@@ -183,6 +191,7 @@ function lcp_yeast_seo_render_meta_box( $post ) {
 	$og_image         = get_post_meta( $post->ID, LCP_YEAST_SEO_OG_IMAGE_META_KEY, true );
 	$twitter_image    = get_post_meta( $post->ID, LCP_YEAST_SEO_TWITTER_IMAGE_META_KEY, true );
 	$robots_index     = get_post_meta( $post->ID, LCP_YEAST_SEO_ROBOTS_META_KEY, true );
+	$canonical_url    = get_post_meta( $post->ID, LCP_YEAST_SEO_CANONICAL_META_KEY, true );
 	$schema           = get_post_meta( $post->ID, LCP_YEAST_SEO_SCHEMA_META_KEY, true );
 	$global_noindex   = ! get_option( 'blog_public' );
 	$robots_index     = $robots_index ? $robots_index : 'index';
@@ -208,6 +217,11 @@ function lcp_yeast_seo_render_meta_box( $post ) {
 	<?php if ( $global_noindex ) : ?>
 		<p class="description"><?php esc_html_e( 'WordPress is currently set to discourage search engines, so this page will output noindex regardless of the per-post setting.', 'lcp-yeast-seo' ); ?></p>
 	<?php endif; ?>
+	<p>
+		<label for="lcp-yeast-seo-canonical-field"><strong><?php esc_html_e( 'Canonical URL', 'lcp-yeast-seo' ); ?></strong></label>
+		<input type="url" id="lcp-yeast-seo-canonical-field" name="<?php echo esc_attr( LCP_YEAST_SEO_CANONICAL_META_KEY ); ?>" value="<?php echo esc_attr( $canonical_url ); ?>" class="widefat code">
+	</p>
+	<p class="description"><?php esc_html_e( 'Optional. Overrides the canonical link tag for this page only. Leave blank to keep the default (this page\'s own URL).', 'lcp-yeast-seo' ); ?></p>
 	<hr>
 	<p>
 		<label for="lcp-yeast-seo-og-title-field"><strong><?php esc_html_e( 'Open Graph title', 'lcp-yeast-seo' ); ?></strong></label>
@@ -266,6 +280,7 @@ function lcp_yeast_seo_save_meta_box( $post_id ) {
 		LCP_YEAST_SEO_OG_IMAGE_META_KEY       => 'esc_url_raw',
 		LCP_YEAST_SEO_TWITTER_IMAGE_META_KEY  => 'esc_url_raw',
 		LCP_YEAST_SEO_ROBOTS_META_KEY         => 'lcp_yeast_seo_sanitize_robots_meta',
+		LCP_YEAST_SEO_CANONICAL_META_KEY      => 'esc_url_raw',
 		LCP_YEAST_SEO_SCHEMA_META_KEY         => 'lcp_yeast_seo_sanitize_schema_meta',
 	);
 
@@ -339,6 +354,7 @@ function lcp_yeast_seo_enqueue_block_editor_assets() {
 					'ogImage'          => LCP_YEAST_SEO_OG_IMAGE_META_KEY,
 					'twitterImage'     => LCP_YEAST_SEO_TWITTER_IMAGE_META_KEY,
 					'robotsIndex'      => LCP_YEAST_SEO_ROBOTS_META_KEY,
+					'canonicalUrl'     => LCP_YEAST_SEO_CANONICAL_META_KEY,
 					'schema'           => LCP_YEAST_SEO_SCHEMA_META_KEY,
 				),
 			)
@@ -408,6 +424,15 @@ function lcp_yeast_seo_current_title() {
  */
 function lcp_yeast_seo_current_description() {
 	return trim( lcp_yeast_seo_current_meta( LCP_YEAST_SEO_DESCRIPTION_META_KEY ) );
+}
+
+/**
+ * Returns the per-post canonical URL override, if set.
+ *
+ * @return string
+ */
+function lcp_yeast_seo_current_canonical() {
+	return trim( lcp_yeast_seo_current_meta( LCP_YEAST_SEO_CANONICAL_META_KEY ) );
 }
 
 /**
@@ -528,6 +553,32 @@ function lcp_yeast_seo_filter_meta_description( $description ) {
 	return '' !== $custom_description ? $custom_description : $description;
 }
 add_filter( 'wpseo_metadesc', 'lcp_yeast_seo_filter_meta_description' );
+
+/**
+ * Overrides WordPress core's own canonical URL (wp_get_canonical_url(),
+ * used by rel_canonical() on wp_head for singular content) when a custom
+ * one is saved.
+ *
+ * @param string $canonical_url Existing canonical URL.
+ * @return string
+ */
+function lcp_yeast_seo_filter_canonical_url( $canonical_url ) {
+	$custom_canonical = lcp_yeast_seo_current_canonical();
+	return '' !== $custom_canonical ? $custom_canonical : $canonical_url;
+}
+add_filter( 'get_canonical_url', 'lcp_yeast_seo_filter_canonical_url' );
+
+/**
+ * Overrides Yoast's own canonical URL when present.
+ *
+ * @param string $canonical_url Existing canonical URL.
+ * @return string
+ */
+function lcp_yeast_seo_filter_wpseo_canonical( $canonical_url ) {
+	$custom_canonical = lcp_yeast_seo_current_canonical();
+	return '' !== $custom_canonical ? $custom_canonical : $canonical_url;
+}
+add_filter( 'wpseo_canonical', 'lcp_yeast_seo_filter_wpseo_canonical' );
 
 /**
  * Filters WordPress core robots directives.
@@ -727,8 +778,14 @@ function lcp_yeast_seo_render_canonical() {
 		return; // Nothing stable to canonicalise to.
 	}
 
-	$paged = max( (int) get_query_var( 'paged' ), (int) get_query_var( 'page' ), 1 );
-	$url   = get_pagenum_link( $paged, false );
+	$custom_canonical = lcp_yeast_seo_current_canonical();
+
+	if ( '' !== $custom_canonical ) {
+		$url = $custom_canonical;
+	} else {
+		$paged = max( (int) get_query_var( 'paged' ), (int) get_query_var( 'page' ), 1 );
+		$url   = get_pagenum_link( $paged, false );
+	}
 
 	if ( ! $url ) {
 		return;
