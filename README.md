@@ -15,10 +15,10 @@ one feature at a time.
 - Also adds a **Yeast SEO** button in the post/page settings sidebar that
   opens the same modal.
 - The modal includes per-post fields for **Page title**,
-  **Meta description**, **Index/Noindex**, **Open Graph title**,
-  **Open Graph description**, **Open Graph image**, **Twitter/X image**,
-  and **Schema (JSON-LD)**, plus live search/social previews and simple
-  character guidance.
+  **Meta description**, **Index/Noindex**, **Canonical URL**,
+  **Open Graph title**, **Open Graph description**, **Open Graph image**,
+  **Twitter/X image**, and **Schema (JSON-LD)**, plus live search/social
+  previews and simple character guidance.
 - Falls back to a classic **Yeast SEO** meta box on non-block-editor screens.
 - Accepts a single JSON object, a top-level array of objects, or a
   `@graph`-wrapped document. Leave it blank to fall back to Yoast's defaults
@@ -32,6 +32,10 @@ one feature at a time.
 - Overrides or outputs Open Graph, Twitter card, and robots meta using the
   same per-post fields, while still honouring WordPress's global
   **Discourage search engines from indexing this site** setting.
+- Overrides the canonical link tag when a custom **Canonical URL** is saved
+  — WordPress core's own `rel_canonical()`, Yoast's `wpseo_canonical`, and
+  this plugin's own non-singular canonical fallback all respect it. Leave
+  blank to keep the default (the page's own URL).
 - Outputs a `<link rel="canonical">` for non-singular views (the posts
   page, taxonomy/post-type/author archives) — WordPress core only ever
   outputs one for singular content, so anything else was left without a
