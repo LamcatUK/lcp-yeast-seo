@@ -677,3 +677,36 @@ function lcp_yeast_seo_render_frontend_meta() {
 	}
 }
 add_action( 'wp_head', 'lcp_yeast_seo_render_frontend_meta', 1 );
+
+/**
+ * Outputs a canonical link tag for non-singular views.
+ *
+ * WordPress core's own rel_canonical() (wp-includes/link-template.php) only
+ * fires for is_singular() — the posts page, taxonomy/post-type archives,
+ * and author archives get no canonical at all out of core, which is what
+ * left a page like the posts page (e.g. a "Guides" index) without one.
+ * Skipped entirely when Yoast is active/handling it (same detection this
+ * file already uses for render_frontend_meta) or on singular content, since
+ * core's own rel_canonical() already covers both cases there.
+ *
+ * @return void
+ */
+function lcp_yeast_seo_render_canonical() {
+	if ( is_singular() || defined( 'WPSEO_VERSION' ) || class_exists( 'WPSEO_Frontend' ) ) {
+		return;
+	}
+
+	if ( is_404() || is_search() ) {
+		return; // Nothing stable to canonicalise to.
+	}
+
+	$paged = max( (int) get_query_var( 'paged' ), (int) get_query_var( 'page' ), 1 );
+	$url   = get_pagenum_link( $paged, false );
+
+	if ( ! $url ) {
+		return;
+	}
+
+	echo '<link rel="canonical" href="' . esc_url( $url ) . '">' . "\n";
+}
+add_action( 'wp_head', 'lcp_yeast_seo_render_canonical', 1 );
