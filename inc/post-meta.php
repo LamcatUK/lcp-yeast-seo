@@ -365,12 +365,36 @@ function lcp_yeast_seo_enqueue_block_editor_assets() {
 add_action( 'enqueue_block_editor_assets', 'lcp_yeast_seo_enqueue_block_editor_assets' );
 
 /**
- * Returns the current singular post ID.
+ * Whether the current request maps to a specific post this plugin can pull
+ * per-post SEO fields from — either a singular view, or the static page set
+ * as the site's "Posts page" (Settings → Reading) being shown as the blog
+ * index. is_singular() alone is false for the latter even though it's a
+ * real page with its own Yeast SEO fields, which otherwise left that
+ * page's title/description/OG/robots settings entirely unused whenever
+ * it's viewed in its posts-page role rather than opened directly.
+ *
+ * @return bool
+ */
+function lcp_yeast_seo_is_managed_view() {
+	return is_singular() || ( is_home() && (int) get_option( 'page_for_posts' ) );
+}
+
+/**
+ * Returns the post ID this plugin's per-post fields apply to for the
+ * current request, per lcp_yeast_seo_is_managed_view().
  *
  * @return int
  */
 function lcp_yeast_seo_current_post_id() {
-	return is_singular() ? (int) get_queried_object_id() : 0;
+	if ( is_singular() ) {
+		return (int) get_queried_object_id();
+	}
+
+	if ( is_home() ) {
+		return (int) get_option( 'page_for_posts' );
+	}
+
+	return 0;
 }
 
 /**
@@ -489,7 +513,7 @@ function lcp_yeast_seo_should_index_current_page() {
 		return false;
 	}
 
-	if ( ! is_singular() ) {
+	if ( ! lcp_yeast_seo_is_managed_view() ) {
 		return true;
 	}
 
@@ -502,7 +526,7 @@ function lcp_yeast_seo_should_index_current_page() {
  * @return bool
  */
 function lcp_yeast_seo_should_override_robots() {
-	return ! get_option( 'blog_public' ) || is_singular();
+	return ! get_option( 'blog_public' ) || lcp_yeast_seo_is_managed_view();
 }
 
 /**
@@ -678,7 +702,7 @@ add_filter(
  * @return void
  */
 function lcp_yeast_seo_render_frontend_meta() {
-	if ( ! is_singular() || defined( 'WPSEO_VERSION' ) || class_exists( 'WPSEO_Frontend' ) ) {
+	if ( ! lcp_yeast_seo_is_managed_view() || defined( 'WPSEO_VERSION' ) || class_exists( 'WPSEO_Frontend' ) ) {
 		return;
 	}
 
@@ -691,12 +715,15 @@ function lcp_yeast_seo_render_frontend_meta() {
 	$site_name    = get_bloginfo( 'name' );
 	$twitter_site = lcp_yeast_seo_get_setting( 'twitter_site', '' );
 	$card_type    = $twitter_image ? 'summary_large_image' : 'summary';
+	// The posts page shown as the blog index is a listing, not a single
+	// piece of content — "article" would misdescribe it to OG consumers.
+	$og_type      = is_singular() ? 'article' : 'website';
 
 	if ( '' !== $description ) {
 		echo '<meta name="description" content="' . esc_attr( $description ) . '">' . "\n";
 	}
 
-	echo '<meta property="og:type" content="article">' . "\n";
+	echo '<meta property="og:type" content="' . esc_attr( $og_type ) . '">' . "\n";
 	echo '<meta property="og:url" content="' . esc_url( $url ) . '">' . "\n";
 
 	if ( '' !== $title ) {
