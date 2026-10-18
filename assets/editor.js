@@ -38,10 +38,22 @@
     }
 
     if (count > max) {
-      return __("A bit long.", "lcp-yeast-seo");
+      return __("Too long - may be cut off in search results.", "lcp-yeast-seo");
     }
 
     return __("Good length.", "lcp-yeast-seo");
+  }
+
+  function countClass(count, min, max) {
+    if (count > max) {
+      return "lcp-yeast-seo-count lcp-yeast-seo-count--long";
+    }
+
+    if (count > 0 && count < min) {
+      return "lcp-yeast-seo-count lcp-yeast-seo-count--short";
+    }
+
+    return "lcp-yeast-seo-count";
   }
 
   function previewUrl(permalink, slug) {
@@ -270,7 +282,7 @@
                 }),
                 el(
                   "p",
-                  { className: "lcp-yeast-seo-count" },
+                  { className: countClass(titleCount, 30, 60) },
                   titleCount + " characters - " + guidance(titleCount, 30, 60),
                 ),
                 el(TextareaControl, {
@@ -287,7 +299,7 @@
                 }),
                 el(
                   "p",
-                  { className: "lcp-yeast-seo-count" },
+                  { className: countClass(descriptionCount, 70, 160) },
                   descriptionCount +
                     " characters - " +
                     guidance(descriptionCount, 70, 160),
