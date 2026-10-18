@@ -715,9 +715,10 @@ function lcp_yeast_seo_render_frontend_meta() {
 	$site_name    = get_bloginfo( 'name' );
 	$twitter_site = lcp_yeast_seo_get_setting( 'twitter_site', '' );
 	$card_type    = $twitter_image ? 'summary_large_image' : 'summary';
-	// The posts page shown as the blog index is a listing, not a single
-	// piece of content — "article" would misdescribe it to OG consumers.
-	$og_type      = is_singular() ? 'article' : 'website';
+	// The posts page shown as the blog index is a listing, and the front
+	// page is the site itself, not a single piece of content — "article"
+	// would misdescribe either to OG consumers.
+	$og_type      = is_singular() && ! is_front_page() ? 'article' : 'website';
 
 	if ( '' !== $description ) {
 		echo '<meta name="description" content="' . esc_attr( $description ) . '">' . "\n";
