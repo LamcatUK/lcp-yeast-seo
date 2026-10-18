@@ -485,7 +485,126 @@ function lcp_yeast_seo_current_og_image() {
 		return $image;
 	}
 
+	$post_id = lcp_yeast_seo_current_post_id();
+
+	if ( $post_id ) {
+		$image = lcp_yeast_seo_get_post_image( $post_id );
+
+		if ( '' !== $image ) {
+			return $image;
+		}
+	}
+
 	return (string) lcp_yeast_seo_get_setting( 'default_social_image', '' );
+}
+
+/**
+ * Finds a social image for a post when none was set explicitly: the
+ * featured image first, then the first image found in the post's blocks
+ * (typically the hero), in document order.
+ *
+ * Blocks are parsed, not rendered — rendering a post's content from the
+ * head would fire every dynamic block's side effects (e.g. queued FAQ
+ * schema) a second time. An attachment ID is preferred over a stored URL
+ * so the result is always a current, absolute upload URL.
+ *
+ * @param int $post_id Post ID.
+ * @return string Image URL, or '' when none found.
+ */
+function lcp_yeast_seo_get_post_image( $post_id ) {
+	static $cache = array();
+
+	if ( isset( $cache[ $post_id ] ) ) {
+		return $cache[ $post_id ];
+	}
+
+	$image = '';
+
+	if ( has_post_thumbnail( $post_id ) ) {
+		$image = (string) get_the_post_thumbnail_url( $post_id, 'full' );
+	}
+
+	if ( '' === $image ) {
+		$post = get_post( $post_id );
+
+		if ( $post && has_blocks( $post->post_content ) ) {
+			$image = lcp_yeast_seo_find_block_image( parse_blocks( $post->post_content ) );
+		}
+	}
+
+	/**
+	 * Filters the automatically detected social image for a post.
+	 *
+	 * @param string $image   Image URL, or '' when none was found.
+	 * @param int    $post_id Post ID.
+	 */
+	$cache[ $post_id ] = (string) apply_filters( 'lcp_yeast_seo_post_image', $image, $post_id );
+
+	return $cache[ $post_id ];
+}
+
+/**
+ * Walks parsed blocks depth-first and returns the first image URL found
+ * in any block attribute: a numeric attachment ID under a key containing
+ * "image"/"img", a URL under such a key, or a core/image-style "id"+"url".
+ *
+ * @param array $blocks Parsed blocks.
+ * @return string Image URL, or ''.
+ */
+function lcp_yeast_seo_find_block_image( $blocks ) {
+	foreach ( $blocks as $block ) {
+		$image = lcp_yeast_seo_find_attr_image( isset( $block['attrs'] ) ? $block['attrs'] : array(), 'core/image' === $block['blockName'] );
+
+		if ( '' === $image && ! empty( $block['innerBlocks'] ) ) {
+			$image = lcp_yeast_seo_find_block_image( $block['innerBlocks'] );
+		}
+
+		if ( '' !== $image ) {
+			return $image;
+		}
+	}
+
+	return '';
+}
+
+/**
+ * Searches one attribute array (recursing into repeater-style nested
+ * arrays) for an image, in key order.
+ *
+ * @param array $attrs      Block attributes.
+ * @param bool  $core_image Whether these are core/image attributes.
+ * @return string Image URL, or ''.
+ */
+function lcp_yeast_seo_find_attr_image( $attrs, $core_image = false ) {
+	foreach ( $attrs as $key => $value ) {
+		$is_image_key = $core_image ? in_array( $key, array( 'id', 'url' ), true ) : (bool) preg_match( '/image|img/i', (string) $key );
+
+		if ( is_array( $value ) ) {
+			$image = lcp_yeast_seo_find_attr_image( $value );
+
+			if ( '' !== $image ) {
+				return $image;
+			}
+
+			continue;
+		}
+
+		if ( ! $is_image_key ) {
+			continue;
+		}
+
+		if ( is_numeric( $value ) && (int) $value > 0 && wp_attachment_is_image( (int) $value ) ) {
+			$url = wp_get_attachment_image_url( (int) $value, 'full' );
+
+			if ( $url ) {
+				return $url;
+			}
+		} elseif ( is_string( $value ) && preg_match( '#^(https?:)?//[^\s]+\.(jpe?g|png|webp|gif|avif)(\?[^\s]*)?$#i', $value ) ) {
+			return $value;
+		}
+	}
+
+	return '';
 }
 
 /**
