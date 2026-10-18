@@ -745,6 +745,13 @@ function lcp_yeast_seo_render_frontend_meta() {
 		echo '<meta property="og:image" content="' . esc_url( $og_image ) . '">' . "\n";
 	}
 
+	// Dates for article-type pages (posts and pages alike, matching og:type
+	// above). Skipped for the front page / blog index, which report "website".
+	if ( 'article' === $og_type && $post_id ) {
+		echo '<meta property="article:published_time" content="' . esc_attr( get_post_time( 'c', true, $post_id ) ) . '">' . "\n";
+		echo '<meta property="article:modified_time" content="' . esc_attr( get_post_modified_time( 'c', true, $post_id ) ) . '">' . "\n";
+	}
+
 	if ( '' !== $twitter_image ) {
 		echo '<meta name="twitter:image" content="' . esc_url( $twitter_image ) . '">' . "\n";
 	}
