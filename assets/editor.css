@@ -181,3 +181,12 @@ textarea.lcp-yeast-seo-schema-field {
     position: static;
   }
 }
+
+.lcp-yeast-seo-count--long {
+  color: #b32d2e;
+  font-weight: 600;
+}
+
+.lcp-yeast-seo-count--short {
+  color: #996800;
+}
