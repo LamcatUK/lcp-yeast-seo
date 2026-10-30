@@ -331,13 +331,12 @@ function lcp_yeast_seo_render_sitemap_index() {
 	}
 
 	$xml  = '<?xml version="1.0" encoding="' . esc_attr( get_bloginfo( 'charset' ) ) . '"?>';
-	$xml .= '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:lcp="https://lamcat.co.uk/ns/yeast-seo">';
+	$xml .= '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">';
 
 	foreach ( $items as $item ) {
 		$xml .= '<sitemap>';
 		$xml .= '<loc>' . esc_url( $item['loc'] ) . '</loc>';
 		$xml .= '<lastmod>' . esc_html( $item['lastmod'] ) . '</lastmod>';
-		$xml .= '<lcp:count>' . absint( $item['count'] ) . '</lcp:count>';
 		$xml .= '</sitemap>';
 	}
 
