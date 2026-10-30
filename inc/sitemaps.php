@@ -49,18 +49,13 @@ add_filter( 'query_vars', 'lcp_yeast_seo_register_sitemap_query_vars' );
 /**
  * Stops WordPress canonical redirects from adding a trailing slash to sitemap files.
  *
- * @param string|false $redirect_url  Proposed redirect URL.
- * @param string       $requested_url Requested URL.
+ * @param string|false $redirect_url Proposed redirect URL.
  * @return string|false
  */
-function lcp_yeast_seo_disable_sitemap_canonical_redirect( $redirect_url, $requested_url ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-	if ( get_query_var( 'lcp_yeast_seo_sitemap' ) ) {
-		return false;
-	}
-
-	return $redirect_url;
+function lcp_yeast_seo_disable_sitemap_canonical_redirect( $redirect_url ) {
+	return get_query_var( 'lcp_yeast_seo_sitemap' ) ? false : $redirect_url;
 }
-add_filter( 'redirect_canonical', 'lcp_yeast_seo_disable_sitemap_canonical_redirect', 10, 2 );
+add_filter( 'redirect_canonical', 'lcp_yeast_seo_disable_sitemap_canonical_redirect' );
 
 /**
  * Flushes rewrites on activation.
@@ -415,6 +410,13 @@ function lcp_yeast_seo_maybe_render_sitemap() {
 
 	if ( ! lcp_yeast_seo_sitemaps_enabled() ) {
 		lcp_yeast_seo_output_sitemap_404();
+	}
+
+	$request_path = (string) wp_parse_url( isset( $_SERVER['REQUEST_URI'] ) ? wp_unslash( $_SERVER['REQUEST_URI'] ) : '', PHP_URL_PATH ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+
+	if ( '/' !== $request_path && '/' === substr( $request_path, -1 ) ) {
+		wp_safe_redirect( home_url( '/' . ltrim( untrailingslashit( substr( $request_path, strlen( (string) wp_parse_url( home_url(), PHP_URL_PATH ) ) ) ), '/' ) ), 301 );
+		exit;
 	}
 
 	if ( 'index' === $type ) {
