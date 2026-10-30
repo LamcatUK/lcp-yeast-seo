@@ -47,6 +47,22 @@ function lcp_yeast_seo_register_sitemap_query_vars( $vars ) {
 add_filter( 'query_vars', 'lcp_yeast_seo_register_sitemap_query_vars' );
 
 /**
+ * Stops WordPress canonical redirects from adding a trailing slash to sitemap files.
+ *
+ * @param string|false $redirect_url  Proposed redirect URL.
+ * @param string       $requested_url Requested URL.
+ * @return string|false
+ */
+function lcp_yeast_seo_disable_sitemap_canonical_redirect( $redirect_url, $requested_url ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+	if ( get_query_var( 'lcp_yeast_seo_sitemap' ) ) {
+		return false;
+	}
+
+	return $redirect_url;
+}
+add_filter( 'redirect_canonical', 'lcp_yeast_seo_disable_sitemap_canonical_redirect', 10, 2 );
+
+/**
  * Flushes rewrites on activation.
  *
  * @return void
