@@ -395,7 +395,11 @@ add_action( 'wp_head', 'lcp_yeast_seo_render', 20 );
  * @return bool
  */
 function lcp_yeast_seo_org_should_output() {
-	if ( is_admin() || ! lcp_yeast_seo_schema_enabled() || '' === lcp_yeast_seo_get_setting( 'org_name', '' ) ) {
+	if ( is_admin() || ! lcp_yeast_seo_schema_enabled() ) {
+		return false;
+	}
+
+	if ( lcp_yeast_seo_org_raw_mode() ? array() === lcp_yeast_seo_org_raw_nodes() : '' === lcp_yeast_seo_get_setting( 'org_name', '' ) ) {
 		return false;
 	}
 
@@ -419,6 +423,53 @@ function lcp_yeast_seo_org_should_output() {
 	$ids[] = absint( lcp_yeast_seo_get_setting( 'org_contact_page', 0 ) );
 
 	return in_array( get_queried_object_id(), array_filter( $ids ), true );
+}
+
+/**
+ * Whether the Organization schema comes from the raw JSON-LD textarea.
+ *
+ * @return bool
+ */
+function lcp_yeast_seo_org_raw_mode() {
+	return 'raw' === lcp_yeast_seo_get_setting( 'org_mode', 'fields' );
+}
+
+/**
+ * Decoded entity nodes from the raw JSON-LD textarea; empty when blank or invalid.
+ *
+ * @return array
+ */
+function lcp_yeast_seo_org_raw_nodes() {
+	$raw = trim( (string) lcp_yeast_seo_get_setting( 'org_raw', '' ) );
+
+	if ( '' === $raw ) {
+		return array();
+	}
+
+	$data = json_decode( $raw, true );
+
+	return JSON_ERROR_NONE === json_last_error() ? lcp_yeast_seo_collect_nodes( $data ) : array();
+}
+
+/**
+ * Wraps nodes as one JSON-LD document: a single node, or a shared-context @graph.
+ *
+ * @param array $nodes Entity nodes.
+ * @return array
+ */
+function lcp_yeast_seo_nodes_to_payload( array $nodes ) {
+	if ( 1 === count( $nodes ) ) {
+		return isset( $nodes[0]['@context'] ) ? $nodes[0] : array( '@context' => 'https://schema.org' ) + $nodes[0];
+	}
+
+	foreach ( $nodes as &$node ) {
+		unset( $node['@context'] );
+	}
+
+	return array(
+		'@context' => 'https://schema.org',
+		'@graph'   => $nodes,
+	);
 }
 
 /**
@@ -499,7 +550,8 @@ function lcp_yeast_seo_render_organization() {
 		return;
 	}
 
-	$json = wp_json_encode( lcp_yeast_seo_build_organization(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG );
+	$payload = lcp_yeast_seo_org_raw_mode() ? lcp_yeast_seo_nodes_to_payload( lcp_yeast_seo_org_raw_nodes() ) : lcp_yeast_seo_build_organization();
+	$json    = wp_json_encode( $payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG );
 
 	if ( false === $json ) {
 		return;

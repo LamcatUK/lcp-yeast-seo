@@ -123,6 +123,15 @@ function lcp_yeast_seo_sanitize_organization( $input ) {
 		$out['org_founded'] = '';
 	}
 
+	$out['org_mode'] = isset( $input['org_mode'] ) && 'raw' === $input['org_mode'] ? 'raw' : 'fields';
+	$out['org_raw']  = isset( $input['org_raw'] ) ? trim( (string) wp_unslash( $input['org_raw'] ) ) : '';
+
+	if ( '' !== $out['org_raw'] ) {
+		foreach ( lcp_yeast_seo_validate_schema_value( $out['org_raw'] ) as $problem ) {
+			add_settings_error( LCP_YEAST_SEO_SETTINGS_OPTION, 'lcp_yeast_seo_org_raw', 'Organization JSON-LD: ' . $problem, 'warning' );
+		}
+	}
+
 	$type             = isset( $input['org_type'] ) ? sanitize_text_field( wp_unslash( $input['org_type'] ) ) : '';
 	$out['org_type']  = isset( lcp_yeast_seo_organization_type_choices()[ $type ] ) ? $type : 'Organization';
 	$out['org_logo']  = isset( $input['org_logo'] ) ? absint( $input['org_logo'] ) : 0;
@@ -241,6 +250,8 @@ function lcp_yeast_seo_register_settings_page() {
 		'lcp_yeast_seo_sitemaps'
 	);
 
+	add_settings_field( 'org_mode', 'Source', 'lcp_yeast_seo_render_org_mode_field', 'lcp-yeast-seo', 'lcp_yeast_seo_organization' );
+	add_settings_field( 'org_raw', 'JSON-LD', 'lcp_yeast_seo_render_org_raw_field', 'lcp-yeast-seo', 'lcp_yeast_seo_organization' );
 	add_settings_field( 'org_type', 'Type', 'lcp_yeast_seo_render_org_type_field', 'lcp-yeast-seo', 'lcp_yeast_seo_organization' );
 
 	foreach ( lcp_yeast_seo_organization_text_fields() as $key => $field ) {
@@ -420,6 +431,34 @@ add_action( 'admin_enqueue_scripts', 'lcp_yeast_seo_settings_assets' );
  */
 function lcp_yeast_seo_render_organization_intro() {
 	echo '<p>Describes the business in JSON-LD. Only fields with a value are output, and nothing is output until a name is set. A page whose own schema field declares an Organization keeps that instead.</p>';
+}
+
+/**
+ * Render the fields / raw JSON-LD source toggle.
+ *
+ * @return void
+ */
+function lcp_yeast_seo_render_org_mode_field() {
+	$mode = lcp_yeast_seo_get_setting( 'org_mode', 'fields' );
+	?>
+	<fieldset data-org-mode>
+		<label style="margin-right:1.5em;"><input type="radio" name="<?php echo esc_attr( LCP_YEAST_SEO_SETTINGS_OPTION ); ?>[org_mode]" value="fields" <?php checked( 'raw' !== $mode ); ?>> Build from fields</label>
+		<label><input type="radio" name="<?php echo esc_attr( LCP_YEAST_SEO_SETTINGS_OPTION ); ?>[org_mode]" value="raw" <?php checked( 'raw' === $mode ); ?>> Paste raw JSON-LD</label>
+	</fieldset>
+	<p class="description">The display rules below apply either way. The mode you don't use keeps its values.</p>
+	<?php
+}
+
+/**
+ * Render the raw JSON-LD textarea.
+ *
+ * @return void
+ */
+function lcp_yeast_seo_render_org_raw_field() {
+	?>
+	<textarea name="<?php echo esc_attr( LCP_YEAST_SEO_SETTINGS_OPTION ); ?>[org_raw]" rows="14" class="large-text code" style="font-family:monospace;" data-org-raw><?php echo esc_textarea( lcp_yeast_seo_get_setting( 'org_raw', '' ) ); ?></textarea>
+	<p class="description">One JSON object, or an array/@graph of objects, with <code>@context</code> and an <code>@type</code>. Invalid JSON is not output.</p>
+	<?php
 }
 
 /**
