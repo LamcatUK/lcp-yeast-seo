@@ -276,7 +276,9 @@
                     updateMeta(settings.metaKeys.title, value);
                   },
                   help: __(
-                    "Overrides the browser title and Yoast title for this page only.",
+                    settings.yoastActive
+                      ? "Overrides the browser title and Yoast title for this page only."
+                      : "Overrides the browser title for this page only.",
                     "lcp-yeast-seo",
                   ),
                 }),

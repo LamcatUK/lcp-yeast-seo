@@ -17,6 +17,16 @@ defined( 'ABSPATH' ) || exit;
 define( 'LCP_YEAST_SEO_SETTINGS_OPTION', 'lcp_yeast_seo_settings' );
 
 /**
+ * Whether Yoast SEO is active, so Yoast-specific wording and behaviour are
+ * only shown where they mean something.
+ *
+ * @return bool
+ */
+function lcp_yeast_seo_yoast_active() {
+	return defined( 'WPSEO_VERSION' ) || class_exists( 'WPSEO_Frontend' );
+}
+
+/**
  * Read one LCP Yeast SEO setting.
  *
  * @param string $key     Setting key.
@@ -271,9 +281,9 @@ function lcp_yeast_seo_render_enable_schema_field() {
 			value="1"
 			<?php checked( $checked ); ?>
 		>
-		Output the per-post JSON-LD schema field and the Yoast Organization-node suppression filter.
+		<?php echo lcp_yeast_seo_yoast_active() ? 'Output the per-post JSON-LD schema field and the Yoast Organization-node suppression filter.' : 'Output the Organization schema and the per-post JSON-LD schema field.'; ?>
 	</label>
-	<p class="description">Turning this off stops schema output entirely and leaves Yoast's own output untouched — the per-post field content is preserved either way.</p>
+	<p class="description">Turning this off stops schema output entirely<?php echo lcp_yeast_seo_yoast_active() ? ' and leaves Yoast\'s own output untouched' : ''; ?> — the per-post field content is preserved either way.</p>
 	<?php
 }
 
@@ -337,7 +347,7 @@ function lcp_yeast_seo_render_enable_sitemaps_field() {
 	<label>
 		<input type="hidden" name="<?php echo esc_attr( LCP_YEAST_SEO_SETTINGS_OPTION ); ?>[enable_sitemaps]" value="0">
 		<input type="checkbox" name="<?php echo esc_attr( LCP_YEAST_SEO_SETTINGS_OPTION ); ?>[enable_sitemaps]" value="1" <?php checked( $checked ); ?>>
-		Generate a Yoast-style <code>sitemap_index.xml</code> and per-post-type sitemap files.
+		Generate a <code>sitemap_index.xml</code> and per-post-type sitemap files.
 	</label>
 	<?php
 }

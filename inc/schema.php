@@ -141,7 +141,9 @@ function lcp_yeast_seo_validate_schema_value( $value ) {
 
 			if ( 'organization' !== $fragment ) {
 				$problems[] = sprintf(
-					'%s is an %s, so its @id must end in "#organization" (e.g. "%s") — otherwise Yoast\'s publisher reference will not resolve to it.',
+					lcp_yeast_seo_yoast_active()
+						? '%s is an %s, so its @id must end in "#organization" (e.g. "%s") — otherwise Yoast\'s publisher reference will not resolve to it.'
+						: '%s is an %s, so its @id should end in "#organization" (e.g. "%s") so other schema on the site can reference it.',
 					$label,
 					reset( $org_type ),
 					lcp_yeast_seo_organization_id()
@@ -172,7 +174,9 @@ function lcp_yeast_seo_check_overlap( $nodes ) {
 
 		$types = array_map( 'strval', (array) $node['@type'] );
 
-		$overlaps = array_merge( $overlaps, array_intersect( $types, LCP_YEAST_SEO_YOAST_OWNED_TYPES ) );
+		if ( lcp_yeast_seo_yoast_active() ) {
+			$overlaps = array_merge( $overlaps, array_intersect( $types, LCP_YEAST_SEO_YOAST_OWNED_TYPES ) );
+		}
 
 		if ( array_intersect( $types, LCP_YEAST_SEO_ORGANIZATION_TYPES ) && ! empty( $node['@id'] ) ) {
 			$id_host   = wp_parse_url( (string) $node['@id'], PHP_URL_HOST );
@@ -180,7 +184,7 @@ function lcp_yeast_seo_check_overlap( $nodes ) {
 
 			if ( $id_host && $site_host && $id_host !== $site_host ) {
 				$messages[] = sprintf(
-					'the Organization @id points at %1$s, but this site is %2$s. That is expected on local or staging; on production it must be %3$s or Yoast\'s publisher reference will not resolve to it.',
+					'the Organization @id points at %1$s, but this site is %2$s. That is expected on local or staging; on production it must be %3$s or references to it will not resolve.',
 					$id_host,
 					$site_host,
 					lcp_yeast_seo_organization_id()

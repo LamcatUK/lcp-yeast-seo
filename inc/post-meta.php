@@ -245,7 +245,7 @@ function lcp_yeast_seo_render_meta_box( $post ) {
 			<label for="lcp-yeast-seo-schema-field"><strong><?php esc_html_e( 'Schema (JSON-LD)', 'lcp-yeast-seo' ); ?></strong></label>
 		</p>
 		<p>
-			<?php esc_html_e( 'One JSON object, or an array/@graph of objects. Leave blank to use Yoast defaults. Saving with a problem will not be blocked; check for an admin notice after save.', 'lcp-yeast-seo' ); ?>
+			<?php echo esc_html( lcp_yeast_seo_yoast_active() ? __( 'One JSON object, or an array/@graph of objects. Leave blank to use Yoast defaults. Saving with a problem will not be blocked; check for an admin notice after save.', 'lcp-yeast-seo' ) : __( 'One JSON object, or an array/@graph of objects. Saving with a problem will not be blocked; check for an admin notice after save.', 'lcp-yeast-seo' ) ); ?>
 		</p>
 		<textarea id="lcp-yeast-seo-schema-field" name="<?php echo esc_attr( LCP_YEAST_SEO_SCHEMA_META_KEY ); ?>" rows="10" class="widefat" style="font-family:monospace;"><?php echo esc_textarea( $schema ); ?></textarea>
 	<?php endif; ?>
@@ -342,6 +342,7 @@ function lcp_yeast_seo_enqueue_block_editor_assets() {
 		'window.lcpYeastSeoEditor = ' . wp_json_encode(
 			array(
 				'schemaEnabled' => lcp_yeast_seo_schema_enabled(),
+				'yoastActive'   => lcp_yeast_seo_yoast_active(),
 				'blogPublic'    => (bool) get_option( 'blog_public' ),
 				'homeUrl'       => home_url( '/' ),
 				'defaultSocialImage' => lcp_yeast_seo_get_setting( 'default_social_image', '' ),
@@ -821,7 +822,7 @@ add_filter(
  * @return void
  */
 function lcp_yeast_seo_render_frontend_meta() {
-	if ( ! lcp_yeast_seo_is_managed_view() || defined( 'WPSEO_VERSION' ) || class_exists( 'WPSEO_Frontend' ) ) {
+	if ( ! lcp_yeast_seo_is_managed_view() || lcp_yeast_seo_yoast_active() ) {
 		return;
 	}
 
@@ -897,7 +898,7 @@ add_action( 'wp_head', 'lcp_yeast_seo_render_frontend_meta', 1 );
  * @return void
  */
 function lcp_yeast_seo_render_canonical() {
-	if ( is_singular() || defined( 'WPSEO_VERSION' ) || class_exists( 'WPSEO_Frontend' ) ) {
+	if ( is_singular() || lcp_yeast_seo_yoast_active() ) {
 		return;
 	}
 

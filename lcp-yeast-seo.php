@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: Yeast SEO
- * Description: Per-post SEO controls for title, meta description, and JSON-LD schema, with Yoast-aware overrides where needed.
+ * Description: Per-post SEO controls for title, meta description, and JSON-LD schema.
  * Version: 0.5.2
  * Requires PHP: 7.4
  * Author: Lamcat - DS
