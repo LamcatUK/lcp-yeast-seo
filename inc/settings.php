@@ -441,11 +441,15 @@ function lcp_yeast_seo_render_organization_intro() {
 function lcp_yeast_seo_render_org_mode_field() {
 	$mode = lcp_yeast_seo_get_setting( 'org_mode', 'fields' );
 	?>
-	<fieldset data-org-mode>
+	<?php
+	$logo_id = absint( lcp_yeast_seo_get_setting( 'org_logo', 0 ) );
+	$logo    = $logo_id ? wp_get_attachment_image_src( $logo_id, 'full' ) : false;
+	?>
+	<fieldset data-org-mode data-org-id="<?php echo esc_attr( lcp_yeast_seo_organization_id() ); ?>" data-org-home="<?php echo esc_attr( home_url( '/' ) ); ?>" <?php echo $logo ? 'data-logo-url="' . esc_attr( $logo[0] ) . '" data-logo-w="' . (int) $logo[1] . '" data-logo-h="' . (int) $logo[2] . '"' : ''; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>>
 		<label style="margin-right:1.5em;"><input type="radio" name="<?php echo esc_attr( LCP_YEAST_SEO_SETTINGS_OPTION ); ?>[org_mode]" value="fields" <?php checked( 'raw' !== $mode ); ?>> Build from fields</label>
 		<label><input type="radio" name="<?php echo esc_attr( LCP_YEAST_SEO_SETTINGS_OPTION ); ?>[org_mode]" value="raw" <?php checked( 'raw' === $mode ); ?>> Paste raw JSON-LD</label>
 	</fieldset>
-	<p class="description">The display rules below apply either way. The mode you don't use keeps its values.</p>
+	<p class="description">The display rules below apply either way. Switching copies the current values across (asking first if it would overwrite something).</p>
 	<?php
 }
 
