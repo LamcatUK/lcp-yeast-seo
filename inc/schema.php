@@ -387,42 +387,53 @@ function lcp_yeast_seo_render() {
 add_action( 'wp_head', 'lcp_yeast_seo_render', 20 );
 
 /**
- * Whether the settings-driven Organization node belongs on the current page.
- *
- * Needs a name, the schema module on, and a matching "Display on" rule. A page
- * whose own schema field declares an Organization keeps that one instead.
+ * Whether the settings-driven Organization node has enough to output.
  *
  * @return bool
  */
-function lcp_yeast_seo_org_should_output() {
-	if ( is_admin() || ! lcp_yeast_seo_schema_enabled() ) {
+function lcp_yeast_seo_org_configured() {
+	if ( ! lcp_yeast_seo_schema_enabled() ) {
 		return false;
 	}
 
-	if ( lcp_yeast_seo_org_raw_mode() ? array() === lcp_yeast_seo_org_raw_nodes() : '' === lcp_yeast_seo_get_setting( 'org_name', '' ) ) {
-		return false;
-	}
+	return lcp_yeast_seo_org_raw_mode() ? array() !== lcp_yeast_seo_org_raw_nodes() : '' !== lcp_yeast_seo_get_setting( 'org_name', '' );
+}
 
-	if ( lcp_yeast_seo_declares_type( LCP_YEAST_SEO_ORGANIZATION_TYPES ) ) {
-		return false;
-	}
-
+/**
+ * Whether the "Display on" rules put the Organization node on a page.
+ *
+ * @param bool $is_front Whether it is the front page.
+ * @param int  $page_id  Page ID, 0 when not a page.
+ * @return bool
+ */
+function lcp_yeast_seo_org_displays_on( $is_front, $page_id ) {
 	if ( '1' === (string) lcp_yeast_seo_get_setting( 'org_show_all', '0' ) ) {
 		return true;
 	}
 
-	if ( is_front_page() ) {
-		return lcp_yeast_seo_org_show_front();
-	}
-
-	if ( ! is_singular( 'page' ) ) {
-		return false;
+	if ( $is_front && lcp_yeast_seo_org_show_front() ) {
+		return true;
 	}
 
 	$ids   = array_map( 'absint', (array) lcp_yeast_seo_get_setting( 'org_extra_pages', array() ) );
 	$ids[] = absint( lcp_yeast_seo_get_setting( 'org_contact_page', 0 ) );
 
-	return in_array( get_queried_object_id(), array_filter( $ids ), true );
+	return $page_id && in_array( $page_id, array_filter( $ids ), true );
+}
+
+/**
+ * Whether the settings-driven Organization node belongs on the current page.
+ *
+ * A page whose own schema field declares an Organization keeps that one instead.
+ *
+ * @return bool
+ */
+function lcp_yeast_seo_org_should_output() {
+	if ( is_admin() || ! lcp_yeast_seo_org_configured() || lcp_yeast_seo_declares_type( LCP_YEAST_SEO_ORGANIZATION_TYPES ) ) {
+		return false;
+	}
+
+	return lcp_yeast_seo_org_displays_on( is_front_page(), is_singular( 'page' ) ? get_queried_object_id() : 0 );
 }
 
 /**

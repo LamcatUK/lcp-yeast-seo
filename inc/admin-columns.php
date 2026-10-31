@@ -34,11 +34,17 @@ function lcp_yeast_seo_filter_posts_columns( $columns ) {
 		if ( 'title' === $key ) {
 			$new['lcp_yeast_seo_title']       = __( 'SEO Title', 'lcp-yeast-seo' );
 			$new['lcp_yeast_seo_description'] = __( 'Meta Desc.', 'lcp-yeast-seo' );
+			if ( lcp_yeast_seo_schema_enabled() ) {
+				$new['lcp_yeast_seo_schema'] = __( 'Schema', 'lcp-yeast-seo' );
+			}
 		}
 	}
 	if ( ! isset( $new['lcp_yeast_seo_title'] ) ) {
 		$new['lcp_yeast_seo_title']       = __( 'SEO Title', 'lcp-yeast-seo' );
 		$new['lcp_yeast_seo_description'] = __( 'Meta Desc.', 'lcp-yeast-seo' );
+		if ( lcp_yeast_seo_schema_enabled() ) {
+			$new['lcp_yeast_seo_schema'] = __( 'Schema', 'lcp-yeast-seo' );
+		}
 	}
 	return $new;
 }
@@ -59,6 +65,10 @@ function lcp_yeast_seo_render_posts_custom_column( $column, $post_id ) {
 		}
 		return;
 	}
+	if ( 'lcp_yeast_seo_schema' === $column ) {
+		echo wp_kses_post( lcp_yeast_seo_schema_column_html( $post_id ) );
+		return;
+	}
 	if ( 'lcp_yeast_seo_description' === $column ) {
 		$description = trim( (string) get_post_meta( $post_id, LCP_YEAST_SEO_DESCRIPTION_META_KEY, true ) );
 		if ( '' !== $description ) {
@@ -69,6 +79,53 @@ function lcp_yeast_seo_render_posts_custom_column( $column, $post_id ) {
 		return;
 	}
 }
+/**
+ * Builds the Schema column cell: the page's own JSON-LD (valid / invalid) and
+ * whether the settings-driven Organization node is output on it.
+ *
+ * @param int $post_id Post ID.
+ * @return string HTML.
+ */
+function lcp_yeast_seo_schema_column_html( $post_id ) {
+	$badges = array();
+	$value  = trim( (string) get_post_meta( $post_id, LCP_YEAST_SEO_SCHEMA_META_KEY, true ) );
+	$own_org = false;
+
+	if ( '' !== $value ) {
+		$data = json_decode( $value, true );
+
+		if ( JSON_ERROR_NONE !== json_last_error() || array() === lcp_yeast_seo_collect_nodes( $data ) ) {
+			$badges[] = array( __( 'Invalid', 'lcp-yeast-seo' ), '#b32d2e', __( 'The JSON-LD in this page\'s schema field is not valid, so nothing is output.', 'lcp-yeast-seo' ) );
+		} else {
+			$types = array();
+			foreach ( lcp_yeast_seo_collect_nodes( $data ) as $node ) {
+				$types = array_merge( $types, array_map( 'strval', (array) ( $node['@type'] ?? array() ) ) );
+			}
+			$own_org  = (bool) array_intersect( $types, LCP_YEAST_SEO_ORGANIZATION_TYPES );
+			$badges[] = array( __( 'Custom', 'lcp-yeast-seo' ), '#2271b1', implode( ', ', array_unique( $types ) ) );
+		}
+	}
+
+	if ( ! $own_org && lcp_yeast_seo_org_configured() ) {
+		$is_front = 'page' === get_option( 'show_on_front' ) && (int) get_option( 'page_on_front' ) === (int) $post_id;
+
+		if ( lcp_yeast_seo_org_displays_on( $is_front, 'page' === get_post_type( $post_id ) ? (int) $post_id : 0 ) ) {
+			$badges[] = array( __( 'Organization', 'lcp-yeast-seo' ), '#007017', __( 'The Organization schema from the Yeast SEO settings is output on this page.', 'lcp-yeast-seo' ) );
+		}
+	}
+
+	if ( ! $badges ) {
+		return '<span aria-hidden="true">&mdash;</span><span class="screen-reader-text">' . esc_html__( 'No schema', 'lcp-yeast-seo' ) . '</span>';
+	}
+
+	$html = '';
+	foreach ( $badges as $badge ) {
+		$html .= '<span class="lcp-yeast-seo-schema-badge" style="background:' . esc_attr( $badge[1] ) . '" title="' . esc_attr( $badge[2] ) . '">' . esc_html( $badge[0] ) . '</span> ';
+	}
+
+	return $html;
+}
+
 function lcp_yeast_seo_filter_sortable_columns( $columns ) {
 	$columns['lcp_yeast_seo_title']       = 'lcp_yeast_seo_title';
 	$columns['lcp_yeast_seo_description'] = 'lcp_yeast_seo_description';
@@ -91,7 +148,7 @@ function lcp_yeast_seo_admin_column_styles() {
 	if ( ! $screen || empty( $screen->post_type ) || ! in_array( $screen->post_type, lcp_yeast_seo_post_types(), true ) ) {
 		return;
 	}
-	echo '<style>.lcp-yeast-seo-too-long{display:inline-block;margin-left:6px;padding:0 6px;border-radius:10px;background:#b32d2e;color:#fff;font-size:11px;line-height:1.8;white-space:nowrap}.column-lcp_yeast_seo_title{width:22%}.column-lcp_yeast_seo_description{width:28%}.column-lcp_yeast_seo_title,.column-lcp_yeast_seo_description{word-wrap:break-word;overflow-wrap:anywhere}</style>';
+	echo '<style>.lcp-yeast-seo-too-long{display:inline-block;margin-left:6px;padding:0 6px;border-radius:10px;background:#b32d2e;color:#fff;font-size:11px;line-height:1.8;white-space:nowrap}.column-lcp_yeast_seo_title{width:22%}.column-lcp_yeast_seo_description{width:28%}.lcp-yeast-seo-schema-badge{display:inline-block;margin:0 4px 2px 0;padding:0 8px;border-radius:10px;color:#fff;font-size:11px;line-height:1.8;white-space:nowrap}.column-lcp_yeast_seo_schema{width:9%}.column-lcp_yeast_seo_title,.column-lcp_yeast_seo_description{word-wrap:break-word;overflow-wrap:anywhere}</style>';
 }
 function lcp_yeast_seo_register_admin_columns() {
 	foreach ( lcp_yeast_seo_post_types() as $post_type ) {
