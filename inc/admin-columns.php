@@ -80,29 +80,33 @@ function lcp_yeast_seo_render_posts_custom_column( $column, $post_id ) {
 	}
 }
 /**
- * Builds the Schema column cell: the page's own JSON-LD (valid / invalid) and
- * whether the settings-driven Organization node is output on it.
+ * Builds the Schema column cell: a green tick when the page outputs schema, an
+ * orange "!" when it outputs more than one block (its own JSON-LD plus the
+ * settings-driven Organization), and a red cross when it outputs none. The
+ * tooltip says which.
  *
  * @param int $post_id Post ID.
  * @return string HTML.
  */
 function lcp_yeast_seo_schema_column_html( $post_id ) {
-	$badges = array();
-	$value  = trim( (string) get_post_meta( $post_id, LCP_YEAST_SEO_SCHEMA_META_KEY, true ) );
+	$sources = array();
+	$notes   = array();
+	$value   = trim( (string) get_post_meta( $post_id, LCP_YEAST_SEO_SCHEMA_META_KEY, true ) );
 	$own_org = false;
 
 	if ( '' !== $value ) {
-		$data = json_decode( $value, true );
+		$data  = json_decode( $value, true );
+		$nodes = JSON_ERROR_NONE === json_last_error() ? lcp_yeast_seo_collect_nodes( $data ) : array();
 
-		if ( JSON_ERROR_NONE !== json_last_error() || array() === lcp_yeast_seo_collect_nodes( $data ) ) {
-			$badges[] = array( __( 'Invalid', 'lcp-yeast-seo' ), '#b32d2e', __( 'The JSON-LD in this page\'s schema field is not valid, so nothing is output.', 'lcp-yeast-seo' ) );
+		if ( ! $nodes ) {
+			$notes[] = __( 'The JSON-LD in the schema field is not valid, so it is not output.', 'lcp-yeast-seo' );
 		} else {
 			$types = array();
-			foreach ( lcp_yeast_seo_collect_nodes( $data ) as $node ) {
+			foreach ( $nodes as $node ) {
 				$types = array_merge( $types, array_map( 'strval', (array) ( $node['@type'] ?? array() ) ) );
 			}
-			$own_org  = (bool) array_intersect( $types, LCP_YEAST_SEO_ORGANIZATION_TYPES );
-			$badges[] = array( __( 'Custom', 'lcp-yeast-seo' ), '#2271b1', implode( ', ', array_unique( $types ) ) );
+			$own_org   = (bool) array_intersect( $types, LCP_YEAST_SEO_ORGANIZATION_TYPES );
+			$sources[] = sprintf( /* translators: %s: schema types. */ __( 'Custom JSON-LD (%s)', 'lcp-yeast-seo' ), implode( ', ', array_unique( $types ) ) );
 		}
 	}
 
@@ -110,20 +114,25 @@ function lcp_yeast_seo_schema_column_html( $post_id ) {
 		$is_front = 'page' === get_option( 'show_on_front' ) && (int) get_option( 'page_on_front' ) === (int) $post_id;
 
 		if ( lcp_yeast_seo_org_displays_on( $is_front, 'page' === get_post_type( $post_id ) ? (int) $post_id : 0 ) ) {
-			$badges[] = array( __( 'Organization', 'lcp-yeast-seo' ), '#007017', __( 'The Organization schema from the Yeast SEO settings is output on this page.', 'lcp-yeast-seo' ) );
+			$sources[] = __( 'Organization from the Yeast SEO settings', 'lcp-yeast-seo' );
 		}
 	}
 
-	if ( ! $badges ) {
-		return '<span aria-hidden="true">&mdash;</span><span class="screen-reader-text">' . esc_html__( 'No schema', 'lcp-yeast-seo' ) . '</span>';
+	if ( ! $sources ) {
+		$symbol = '&#10007;';
+		$colour = '#b32d2e';
+		$label  = $notes ? $notes[0] : __( 'No schema', 'lcp-yeast-seo' );
+	} elseif ( count( $sources ) > 1 ) {
+		$symbol = '!';
+		$colour = '#dba617';
+		$label  = implode( ' + ', $sources );
+	} else {
+		$symbol = '&#10003;';
+		$colour = '#007017';
+		$label  = $sources[0];
 	}
 
-	$html = '';
-	foreach ( $badges as $badge ) {
-		$html .= '<span class="lcp-yeast-seo-schema-badge" style="background:' . esc_attr( $badge[1] ) . '" title="' . esc_attr( $badge[2] ) . '">' . esc_html( $badge[0] ) . '</span> ';
-	}
-
-	return $html;
+	return '<span class="lcp-yeast-seo-schema-status" style="color:' . esc_attr( $colour ) . '" title="' . esc_attr( $label ) . '"><span aria-hidden="true">' . $symbol . '</span><span class="screen-reader-text">' . esc_html( $label ) . '</span></span>';
 }
 
 function lcp_yeast_seo_filter_sortable_columns( $columns ) {
@@ -148,7 +157,7 @@ function lcp_yeast_seo_admin_column_styles() {
 	if ( ! $screen || empty( $screen->post_type ) || ! in_array( $screen->post_type, lcp_yeast_seo_post_types(), true ) ) {
 		return;
 	}
-	echo '<style>.lcp-yeast-seo-too-long{display:inline-block;margin-left:6px;padding:0 6px;border-radius:10px;background:#b32d2e;color:#fff;font-size:11px;line-height:1.8;white-space:nowrap}.column-lcp_yeast_seo_title{width:22%}.column-lcp_yeast_seo_description{width:28%}.lcp-yeast-seo-schema-badge{display:inline-block;margin:0 4px 2px 0;padding:0 8px;border-radius:10px;color:#fff;font-size:11px;line-height:1.8;white-space:nowrap}.column-lcp_yeast_seo_schema{width:9%}.column-lcp_yeast_seo_title,.column-lcp_yeast_seo_description{word-wrap:break-word;overflow-wrap:anywhere}</style>';
+	echo '<style>.lcp-yeast-seo-too-long{display:inline-block;margin-left:6px;padding:0 6px;border-radius:10px;background:#b32d2e;color:#fff;font-size:11px;line-height:1.8;white-space:nowrap}.column-lcp_yeast_seo_title{width:22%}.column-lcp_yeast_seo_description{width:28%}.lcp-yeast-seo-schema-status{font-size:18px;font-weight:700;line-height:1}.column-lcp_yeast_seo_schema{width:6%}.column-lcp_yeast_seo_title,.column-lcp_yeast_seo_description{word-wrap:break-word;overflow-wrap:anywhere}</style>';
 }
 function lcp_yeast_seo_register_admin_columns() {
 	foreach ( lcp_yeast_seo_post_types() as $post_type ) {
