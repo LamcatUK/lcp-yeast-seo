@@ -36,7 +36,7 @@ define( 'LCP_YEAST_SEO_YOAST_OWNED_TYPES', array( 'WebPage', 'WebSite', 'Breadcr
  * Yoast's cross-references resolve. Organization subtypes (LocalBusiness,
  * Corporation) can be added here.
  */
-define( 'LCP_YEAST_SEO_ORGANIZATION_TYPES', array( 'Organization' ) );
+define( 'LCP_YEAST_SEO_ORGANIZATION_TYPES', array( 'Organization', 'Corporation', 'LocalBusiness', 'ProfessionalService' ) );
 
 /**
  * Returns the canonical @id an Organization node must use.
@@ -326,7 +326,11 @@ function lcp_yeast_seo_declares_type( array $types ) {
  * @return bool
  */
 function lcp_yeast_seo_maybe_disable_yoast_organization( $needed ) {
-	return lcp_yeast_seo_declares_type( LCP_YEAST_SEO_ORGANIZATION_TYPES ) ? false : $needed;
+	if ( lcp_yeast_seo_declares_type( LCP_YEAST_SEO_ORGANIZATION_TYPES ) || lcp_yeast_seo_org_should_output() ) {
+		return false;
+	}
+
+	return $needed;
 }
 add_filter( 'wpseo_schema_needs_organization', 'lcp_yeast_seo_maybe_disable_yoast_organization' );
 
@@ -377,3 +381,126 @@ function lcp_yeast_seo_render() {
 	echo '<script type="application/ld+json">' . $json . '</script>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 }
 add_action( 'wp_head', 'lcp_yeast_seo_render', 20 );
+
+/**
+ * Whether the settings-driven Organization node belongs on the current page.
+ *
+ * Needs a name, the schema module on, and a matching "Display on" rule. A page
+ * whose own schema field declares an Organization keeps that one instead.
+ *
+ * @return bool
+ */
+function lcp_yeast_seo_org_should_output() {
+	if ( is_admin() || ! lcp_yeast_seo_schema_enabled() || '' === lcp_yeast_seo_get_setting( 'org_name', '' ) ) {
+		return false;
+	}
+
+	if ( lcp_yeast_seo_declares_type( LCP_YEAST_SEO_ORGANIZATION_TYPES ) ) {
+		return false;
+	}
+
+	if ( '1' === (string) lcp_yeast_seo_get_setting( 'org_show_all', '0' ) ) {
+		return true;
+	}
+
+	if ( is_front_page() ) {
+		return lcp_yeast_seo_org_show_front();
+	}
+
+	if ( ! is_singular( 'page' ) ) {
+		return false;
+	}
+
+	$ids   = array_map( 'absint', (array) lcp_yeast_seo_get_setting( 'org_extra_pages', array() ) );
+	$ids[] = absint( lcp_yeast_seo_get_setting( 'org_contact_page', 0 ) );
+
+	return in_array( get_queried_object_id(), array_filter( $ids ), true );
+}
+
+/**
+ * Builds the Organization node from the settings, omitting empty properties.
+ *
+ * @return array
+ */
+function lcp_yeast_seo_build_organization() {
+	$get  = 'lcp_yeast_seo_get_setting';
+	$type = $get( 'org_type', 'Organization' );
+
+	$node = array(
+		'@context' => 'https://schema.org',
+		'@type'    => isset( lcp_yeast_seo_organization_type_choices()[ $type ] ) ? $type : 'Organization',
+		'@id'      => lcp_yeast_seo_organization_id(),
+		'name'     => $get( 'org_name' ),
+		'url'      => $get( 'org_url', home_url( '/' ) ),
+	);
+
+	$simple = array(
+		'legalName'   => 'org_legal_name',
+		'description' => 'org_description',
+		'email'       => 'org_email',
+		'telephone'   => 'org_phone',
+		'foundingDate' => 'org_founded',
+	);
+
+	foreach ( $simple as $property => $key ) {
+		$value = $get( $key );
+		if ( '' !== $value ) {
+			$node[ $property ] = $value;
+		}
+	}
+
+	$logo_id = absint( $get( 'org_logo', 0 ) );
+	$logo    = $logo_id ? wp_get_attachment_image_src( $logo_id, 'full' ) : false;
+
+	if ( $logo ) {
+		$node['logo'] = array(
+			'@type'  => 'ImageObject',
+			'url'    => $logo[0],
+			'width'  => (int) $logo[1],
+			'height' => (int) $logo[2],
+		);
+	}
+
+	$address = array_filter(
+		array(
+			'streetAddress'   => $get( 'org_street' ),
+			'addressLocality' => $get( 'org_locality' ),
+			'addressRegion'   => $get( 'org_region' ),
+			'postalCode'      => $get( 'org_postcode' ),
+			'addressCountry'  => $get( 'org_country' ),
+		),
+		'strlen'
+	);
+
+	if ( $address ) {
+		$node['address'] = array( '@type' => 'PostalAddress' ) + $address;
+	}
+
+	$same_as = array_filter( preg_split( '/\R/', (string) $get( 'org_same_as' ) ) );
+
+	if ( $same_as ) {
+		$node['sameAs'] = array_values( $same_as );
+	}
+
+	return $node;
+}
+
+/**
+ * Outputs the settings-driven Organization JSON-LD in wp_head.
+ *
+ * @return void
+ */
+function lcp_yeast_seo_render_organization() {
+	if ( ! lcp_yeast_seo_org_should_output() ) {
+		return;
+	}
+
+	$json = wp_json_encode( lcp_yeast_seo_build_organization(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG );
+
+	if ( false === $json ) {
+		return;
+	}
+
+	echo '<script type="application/ld+json">' . $json . '</script>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+}
+add_action( 'wp_head', 'lcp_yeast_seo_render_organization', 19 );
