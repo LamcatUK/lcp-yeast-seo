@@ -205,16 +205,16 @@ function lcp_yeast_seo_register_settings_page() {
 
 	register_setting( 'lcp_yeast_seo_settings', LCP_YEAST_SEO_SETTINGS_OPTION, 'lcp_yeast_seo_sanitize_settings' );
 
-	add_settings_section( 'lcp_yeast_seo_schema', 'Schema', '__return_false', 'lcp-yeast-seo' );
+	add_settings_section( 'lcp_yeast_seo_schema', 'Schema', '__return_false', 'lcp-yeast-seo-schema' );
 	add_settings_section( 'lcp_yeast_seo_defaults', 'Defaults', '__return_false', 'lcp-yeast-seo' );
 	add_settings_section( 'lcp_yeast_seo_sitemaps', 'XML Sitemaps', '__return_false', 'lcp-yeast-seo' );
-	add_settings_section( 'lcp_yeast_seo_organization', 'Organization schema', 'lcp_yeast_seo_render_organization_intro', 'lcp-yeast-seo' );
+	add_settings_section( 'lcp_yeast_seo_organization', 'Organization schema', 'lcp_yeast_seo_render_organization_intro', 'lcp-yeast-seo-schema' );
 
 	add_settings_field(
 		'enable_schema',
 		'Enable Schema Markup',
 		'lcp_yeast_seo_render_enable_schema_field',
-		'lcp-yeast-seo',
+		'lcp-yeast-seo-schema',
 		'lcp_yeast_seo_schema'
 	);
 
@@ -250,16 +250,16 @@ function lcp_yeast_seo_register_settings_page() {
 		'lcp_yeast_seo_sitemaps'
 	);
 
-	add_settings_field( 'org_mode', 'Source', 'lcp_yeast_seo_render_org_mode_field', 'lcp-yeast-seo', 'lcp_yeast_seo_organization' );
-	add_settings_field( 'org_raw', 'JSON-LD', 'lcp_yeast_seo_render_org_raw_field', 'lcp-yeast-seo', 'lcp_yeast_seo_organization' );
-	add_settings_field( 'org_type', 'Type', 'lcp_yeast_seo_render_org_type_field', 'lcp-yeast-seo', 'lcp_yeast_seo_organization' );
+	add_settings_field( 'org_mode', 'Source', 'lcp_yeast_seo_render_org_mode_field', 'lcp-yeast-seo-schema', 'lcp_yeast_seo_organization' );
+	add_settings_field( 'org_raw', 'JSON-LD', 'lcp_yeast_seo_render_org_raw_field', 'lcp-yeast-seo-schema', 'lcp_yeast_seo_organization' );
+	add_settings_field( 'org_type', 'Type', 'lcp_yeast_seo_render_org_type_field', 'lcp-yeast-seo-schema', 'lcp_yeast_seo_organization' );
 
 	foreach ( lcp_yeast_seo_organization_text_fields() as $key => $field ) {
 		add_settings_field(
 			$key,
 			$field[0],
 			'lcp_yeast_seo_render_org_text_field',
-			'lcp-yeast-seo',
+			'lcp-yeast-seo-schema',
 			'lcp_yeast_seo_organization',
 			array(
 				'key'       => $key,
@@ -270,9 +270,9 @@ function lcp_yeast_seo_register_settings_page() {
 		);
 	}
 
-	add_settings_field( 'org_logo', 'Logo', 'lcp_yeast_seo_render_org_logo_field', 'lcp-yeast-seo', 'lcp_yeast_seo_organization' );
-	add_settings_field( 'org_same_as', 'Social profiles (sameAs)', 'lcp_yeast_seo_render_org_same_as_field', 'lcp-yeast-seo', 'lcp_yeast_seo_organization' );
-	add_settings_field( 'org_display', 'Display on', 'lcp_yeast_seo_render_org_display_field', 'lcp-yeast-seo', 'lcp_yeast_seo_organization' );
+	add_settings_field( 'org_logo', 'Logo', 'lcp_yeast_seo_render_org_logo_field', 'lcp-yeast-seo-schema', 'lcp_yeast_seo_organization' );
+	add_settings_field( 'org_same_as', 'Social profiles (sameAs)', 'lcp_yeast_seo_render_org_same_as_field', 'lcp-yeast-seo-schema', 'lcp_yeast_seo_organization' );
+	add_settings_field( 'org_display', 'Display on', 'lcp_yeast_seo_render_org_display_field', 'lcp-yeast-seo-schema', 'lcp_yeast_seo_organization' );
 }
 add_action( 'admin_menu', 'lcp_yeast_seo_register_settings_page' );
 
@@ -394,15 +394,28 @@ function lcp_yeast_seo_render_sitemap_post_types_field() {
  * @return void
  */
 function lcp_yeast_seo_render_settings_page() {
+	$tabs = array(
+		'general' => array( 'General', 'lcp-yeast-seo' ),
+		'schema'  => array( 'Schema', 'lcp-yeast-seo-schema' ),
+	);
+	// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+	$active = isset( $_GET['tab'] ) && isset( $tabs[ $_GET['tab'] ] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : 'general';
 	?>
 	<div class="wrap">
 		<h1>Yeast SEO</h1>
+		<nav class="nav-tab-wrapper" data-lcp-tabs>
+			<?php foreach ( $tabs as $slug => $tab ) : ?>
+				<a href="<?php echo esc_url( add_query_arg( array( 'page' => 'lcp-yeast-seo', 'tab' => $slug ), admin_url( 'admin.php' ) ) ); ?>" class="nav-tab<?php echo $slug === $active ? ' nav-tab-active' : ''; ?>" data-tab="<?php echo esc_attr( $slug ); ?>"><?php echo esc_html( $tab[0] ); ?></a>
+			<?php endforeach; ?>
+		</nav>
 		<form action="options.php" method="post">
-			<?php
-			settings_fields( 'lcp_yeast_seo_settings' );
-			do_settings_sections( 'lcp-yeast-seo' );
-			submit_button();
-			?>
+			<?php settings_fields( 'lcp_yeast_seo_settings' ); ?>
+			<?php foreach ( $tabs as $slug => $tab ) : ?>
+				<div class="lcp-yeast-seo-panel" data-panel="<?php echo esc_attr( $slug ); ?>" <?php echo $slug === $active ? '' : 'hidden'; ?>>
+					<?php do_settings_sections( $tab[1] ); ?>
+				</div>
+			<?php endforeach; ?>
+			<?php submit_button(); ?>
 		</form>
 	</div>
 	<?php
@@ -420,7 +433,8 @@ function lcp_yeast_seo_settings_assets( $hook ) {
 	}
 
 	wp_enqueue_media();
-	wp_enqueue_script( 'lcp-yeast-seo-settings', LCP_YEAST_SEO_URL . 'assets/settings.js', array(), LCP_YEAST_SEO_VERSION, true );
+	$script_path = LCP_YEAST_SEO_PATH . 'assets/settings.js';
+	wp_enqueue_script( 'lcp-yeast-seo-settings', LCP_YEAST_SEO_URL . 'assets/settings.js', array(), file_exists( $script_path ) ? filemtime( $script_path ) : LCP_YEAST_SEO_VERSION, true );
 }
 add_action( 'admin_enqueue_scripts', 'lcp_yeast_seo_settings_assets' );
 

@@ -1,4 +1,19 @@
 ( function () {
+	var nav = document.querySelector( '[data-lcp-tabs]' );
+	if ( nav ) {
+		var panels = document.querySelectorAll( '[data-panel]' );
+		var referer = document.querySelector( 'input[name="_wp_http_referer"]' );
+		nav.addEventListener( 'click', function ( e ) {
+			var link = e.target.closest( '[data-tab]' );
+			if ( ! link ) { return; }
+			e.preventDefault();
+			nav.querySelectorAll( '.nav-tab' ).forEach( function ( a ) { a.classList.toggle( 'nav-tab-active', a === link ); } );
+			panels.forEach( function ( p ) { p.hidden = p.dataset.panel !== link.dataset.tab; } );
+			history.replaceState( null, '', link.href );
+			if ( referer ) { referer.value = link.getAttribute( 'href' ).replace( /^.*\/wp-admin\//, '/wp-admin/' ); }
+		} );
+	}
+
 	var modeBox = document.querySelector( '[data-org-mode]' );
 	if ( modeBox ) {
 		var rowOf = function ( el ) { return el.closest( 'tr' ); };
