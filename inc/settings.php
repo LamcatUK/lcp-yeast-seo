@@ -93,6 +93,46 @@ function lcp_yeast_seo_organization_type_choices() {
 }
 
 /**
+ * Whether the "build from fields" Organization editor is shown.
+ *
+ * Off by default: a fixed set of fields can't express owners, opening hours,
+ * reviews and the rest of what an Organization node can carry, so the raw
+ * JSON-LD box is the only editor until that is designed. Sites still holding
+ * field values are migrated to raw JSON-LD on first admin load, and the
+ * stored field values are kept untouched. Return true from this filter to
+ * bring the field editor back.
+ *
+ * @return bool
+ */
+function lcp_yeast_seo_org_fields_ui() {
+	return (bool) apply_filters( 'lcp_yeast_seo_org_fields_ui', false );
+}
+
+/**
+ * Converts a settings-driven (fields) Organization into raw JSON-LD, once, so
+ * hiding the field editor changes nothing on the front end.
+ *
+ * @return void
+ */
+function lcp_yeast_seo_migrate_org_fields_to_raw() {
+	if ( lcp_yeast_seo_org_fields_ui() || lcp_yeast_seo_org_raw_mode() || '' === lcp_yeast_seo_get_setting( 'org_name', '' ) ) {
+		return;
+	}
+
+	$settings = get_option( LCP_YEAST_SEO_SETTINGS_OPTION, array() );
+
+	if ( '' !== trim( (string) ( $settings['org_raw'] ?? '' ) ) ) {
+		$settings['org_mode'] = 'raw';
+	} else {
+		$settings['org_raw']  = wp_json_encode( lcp_yeast_seo_build_organization(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT );
+		$settings['org_mode'] = 'raw';
+	}
+
+	update_option( LCP_YEAST_SEO_SETTINGS_OPTION, $settings );
+}
+add_action( 'admin_init', 'lcp_yeast_seo_migrate_org_fields_to_raw', 20 );
+
+/**
  * Sanitizes the Organization schema settings.
  *
  * @param array $input Raw submitted settings.
@@ -151,6 +191,21 @@ function lcp_yeast_seo_sanitize_organization( $input ) {
 	$out['org_extra_pages']  = isset( $input['org_extra_pages'] ) && is_array( $input['org_extra_pages'] )
 		? array_values( array_unique( array_filter( array_map( 'absint', $input['org_extra_pages'] ) ) ) )
 		: array();
+
+	if ( ! lcp_yeast_seo_org_fields_ui() ) {
+		// The field editor isn't on the page, so its inputs aren't submitted.
+		// Keep what is stored rather than blanking it, and stay in raw mode.
+		$existing    = get_option( LCP_YEAST_SEO_SETTINGS_OPTION, array() );
+		$field_keys = array_merge( array_keys( lcp_yeast_seo_organization_text_fields() ), array( 'org_type', 'org_logo', 'org_same_as' ) );
+
+		foreach ( $field_keys as $key ) {
+			if ( isset( $existing[ $key ] ) ) {
+				$out[ $key ] = $existing[ $key ];
+			}
+		}
+
+		$out['org_mode'] = 'raw';
+	}
 
 	return $out;
 }
@@ -250,28 +305,35 @@ function lcp_yeast_seo_register_settings_page() {
 		'lcp_yeast_seo_sitemaps'
 	);
 
-	add_settings_field( 'org_mode', 'Source', 'lcp_yeast_seo_render_org_mode_field', 'lcp-yeast-seo-schema', 'lcp_yeast_seo_organization' );
-	add_settings_field( 'org_raw', 'JSON-LD', 'lcp_yeast_seo_render_org_raw_field', 'lcp-yeast-seo-schema', 'lcp_yeast_seo_organization' );
-	add_settings_field( 'org_type', 'Type', 'lcp_yeast_seo_render_org_type_field', 'lcp-yeast-seo-schema', 'lcp_yeast_seo_organization' );
-
-	foreach ( lcp_yeast_seo_organization_text_fields() as $key => $field ) {
-		add_settings_field(
-			$key,
-			$field[0],
-			'lcp_yeast_seo_render_org_text_field',
-			'lcp-yeast-seo-schema',
-			'lcp_yeast_seo_organization',
-			array(
-				'key'       => $key,
-				'type'      => $field[1],
-				'help'      => $field[2],
-				'label_for' => 'lcp-yeast-seo-' . $key,
-			)
-		);
+	if ( lcp_yeast_seo_org_fields_ui() ) {
+		add_settings_field( 'org_mode', 'Source', 'lcp_yeast_seo_render_org_mode_field', 'lcp-yeast-seo-schema', 'lcp_yeast_seo_organization' );
 	}
 
-	add_settings_field( 'org_logo', 'Logo', 'lcp_yeast_seo_render_org_logo_field', 'lcp-yeast-seo-schema', 'lcp_yeast_seo_organization' );
-	add_settings_field( 'org_same_as', 'Social profiles (sameAs)', 'lcp_yeast_seo_render_org_same_as_field', 'lcp-yeast-seo-schema', 'lcp_yeast_seo_organization' );
+	add_settings_field( 'org_raw', 'JSON-LD', 'lcp_yeast_seo_render_org_raw_field', 'lcp-yeast-seo-schema', 'lcp_yeast_seo_organization' );
+
+	if ( lcp_yeast_seo_org_fields_ui() ) {
+		add_settings_field( 'org_type', 'Type', 'lcp_yeast_seo_render_org_type_field', 'lcp-yeast-seo-schema', 'lcp_yeast_seo_organization' );
+
+		foreach ( lcp_yeast_seo_organization_text_fields() as $key => $field ) {
+			add_settings_field(
+				$key,
+				$field[0],
+				'lcp_yeast_seo_render_org_text_field',
+				'lcp-yeast-seo-schema',
+				'lcp_yeast_seo_organization',
+				array(
+					'key'       => $key,
+					'type'      => $field[1],
+					'help'      => $field[2],
+					'label_for' => 'lcp-yeast-seo-' . $key,
+				)
+			);
+		}
+
+		add_settings_field( 'org_logo', 'Logo', 'lcp_yeast_seo_render_org_logo_field', 'lcp-yeast-seo-schema', 'lcp_yeast_seo_organization' );
+		add_settings_field( 'org_same_as', 'Social profiles (sameAs)', 'lcp_yeast_seo_render_org_same_as_field', 'lcp-yeast-seo-schema', 'lcp_yeast_seo_organization' );
+	}
+
 	add_settings_field( 'org_display', 'Display on', 'lcp_yeast_seo_render_org_display_field', 'lcp-yeast-seo-schema', 'lcp_yeast_seo_organization' );
 }
 add_action( 'admin_menu', 'lcp_yeast_seo_register_settings_page' );
@@ -444,7 +506,7 @@ add_action( 'admin_enqueue_scripts', 'lcp_yeast_seo_settings_assets' );
  * @return void
  */
 function lcp_yeast_seo_render_organization_intro() {
-	echo '<p>Describes the business in JSON-LD. Only fields with a value are output, and nothing is output until a name is set. A page whose own schema field declares an Organization keeps that instead.</p>';
+	echo '<p>Paste the Organization JSON-LD for this site. It is output only on the pages chosen under Display on; a page whose own schema field declares an Organization keeps that instead.</p>';
 }
 
 /**
@@ -475,7 +537,7 @@ function lcp_yeast_seo_render_org_mode_field() {
 function lcp_yeast_seo_render_org_raw_field() {
 	?>
 	<textarea name="<?php echo esc_attr( LCP_YEAST_SEO_SETTINGS_OPTION ); ?>[org_raw]" rows="14" class="large-text code" style="font-family:monospace;" data-org-raw><?php echo esc_textarea( lcp_yeast_seo_get_setting( 'org_raw', '' ) ); ?></textarea>
-	<p class="description">One JSON object, or an array/@graph of objects, with <code>@context</code> and an <code>@type</code>. Invalid JSON is not output.</p>
+	<p class="description">One JSON object, or an array/@graph of objects, with <code>@context</code> and an <code>@type</code>. Give the Organization an <code>@id</code> ending in <code>#organization</code>. Invalid JSON is not output.</p>
 	<?php
 }
 
