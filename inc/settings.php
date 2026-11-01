@@ -382,7 +382,7 @@ function lcp_yeast_seo_render_twitter_site_field() {
 	$value = lcp_yeast_seo_get_setting( 'twitter_site', '' );
 	?>
 	<input type="text" name="<?php echo esc_attr( LCP_YEAST_SEO_SETTINGS_OPTION ); ?>[twitter_site]" value="<?php echo esc_attr( $value ); ?>" class="regular-text">
-	<p class="description">Optional handle like <code>@chillibyte</code> for <code>twitter:site</code>.</p>
+	<p class="description">Optional handle like <code>@yourhandle</code> for <code>twitter:site</code>.</p>
 	<?php
 }
 
