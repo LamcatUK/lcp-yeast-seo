@@ -3,7 +3,7 @@ Tags: seo, schema, sitemap, meta description, open graph
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 0.12.3
+Stable tag: 0.12.4
 
 Per-post SEO controls for titles, descriptions, social tags, canonical URLs and schema, with XML sitemaps. Built to replace Yoast one feature at a time.
 
@@ -33,6 +33,9 @@ After every deploy, run the smoke test against the live site. It checks the site
     LCP_SMOKE_URL=https://example.com LCP_SMOKE_ARCHIVE=/guides/ composer test:smoke
 
 == Changelog ==
+
+= 0.12.4 =
+* New: "Re-check pages with errors" on the Health tab runs the scan again for just the pages currently showing errors, such as ones that timed out or were fixed since. The button shows how many, and hides itself when there are none.
 
 = 0.12.3 =
 * Fix: the Health scan no longer hangs on a site whose server can't connect to its own public address (for example behind a CDN or firewall that blocks the host's IP, which showed as `cURL error 28: Failed to connect … port 443`). When the normal fetch can't connect, the scan retries through the server's own IP while keeping the site's hostname, and remembers the route that worked for an hour.

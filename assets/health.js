@@ -9,6 +9,7 @@
 	var summary = root.querySelector( '[data-health-summary]' );
 	var list = root.querySelector( '[data-health-list]' );
 	var scanButton = root.querySelector( '[data-health-scan]' );
+	var recheckErrors = root.querySelector( '[data-health-recheck-errors]' );
 	var progress = root.querySelector( '[data-health-progress]' );
 	var bar = root.querySelector( '[data-health-bar]' );
 	var status = root.querySelector( '[data-health-status]' );
@@ -50,21 +51,35 @@
 			} );
 	}
 
+	function errorIds() {
+		return Array.prototype.map.call( root.querySelectorAll( '.lcp-ys-row[data-status="error"]' ), function ( row ) {
+			return parseInt( row.getAttribute( 'data-id' ), 10 );
+		} );
+	}
+
+	function updateRecheck() {
+		var count = errorIds().length;
+
+		recheckErrors.hidden = 0 === count;
+		recheckErrors.textContent = 'Re-check ' + count + ( 1 === count ? ' page' : ' pages' ) + ' with errors';
+	}
+
 	function setBusy( busy ) {
 		running = busy;
 		scanButton.disabled = busy;
+		recheckErrors.disabled = busy;
 		root.querySelectorAll( '[data-recheck]' ).forEach( function ( button ) {
 			button.disabled = busy;
 		} );
 		progress.hidden = ! busy && ! status.textContent;
 	}
 
-	function scan() {
-		if ( running ) {
+	function scan( idList ) {
+		if ( running || ! idList.length ) {
 			return;
 		}
 
-		var queue = config.ids.map( Number );
+		var queue = idList.map( Number );
 		var total = queue.length;
 		var finished = 0;
 		var skipped = 0;
@@ -126,7 +141,15 @@
 		next();
 	}
 
-	scanButton.addEventListener( 'click', scan );
+	scanButton.addEventListener( 'click', function () {
+		scan( config.ids );
+	} );
+
+	recheckErrors.addEventListener( 'click', function () {
+		scan( errorIds() );
+	} );
+
+	updateRecheck();
 
 	root.addEventListener( 'click', function ( event ) {
 		var recheck = event.target.closest( '[data-recheck]' );
@@ -168,6 +191,8 @@
 
 	var observer = new MutationObserver( function () {
 		var active = root.getAttribute( 'data-filter' );
+
+		updateRecheck();
 
 		root.querySelectorAll( '.lcp-ys-filter__btn' ).forEach( function ( button ) {
 			button.classList.toggle( 'is-active', button.getAttribute( 'data-filter' ) === active );

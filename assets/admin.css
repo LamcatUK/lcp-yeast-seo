@@ -511,6 +511,16 @@
 	text-align: center;
 }
 
+.lcp-ys-scan .button:not(.button-hero) {
+	width: 100%;
+	margin: 10px 0 0;
+	text-align: center;
+}
+
+.lcp-ys-scan [hidden] {
+	display: none;
+}
+
 .lcp-ys-progress {
 	margin-top: 14px;
 }
