@@ -3,7 +3,7 @@ Tags: seo, schema, sitemap, meta description, open graph
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 0.9.0
+Stable tag: 0.9.1
 
 Per-post SEO controls for titles, descriptions, social tags, canonical URLs and schema, with XML sitemaps. Built to replace Yoast one feature at a time.
 
@@ -33,6 +33,9 @@ After every deploy, run the smoke test against the live site. It checks the site
     LCP_SMOKE_URL=https://example.com LCP_SMOKE_ARCHIVE=/guides/ composer test:smoke
 
 == Changelog ==
+
+= 0.9.1 =
+* The Schema column in admin lists shows a muted grey "A" for pages that have no schema of their own but get it generated automatically (the tooltip lists the types), instead of a red cross. Only exceptions use colour.
 
 = 0.9.0 =
 * New: Article author setting on the Schema tab: credit posts to the post's author (a Person, as before) or to the site as an Organization, for sites that publish under one name.

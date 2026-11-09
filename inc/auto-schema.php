@@ -356,6 +356,60 @@ function lcp_yeast_seo_declared_types() {
 }
 
 /**
+ * The schema types the plugin would generate for a page, from plain inputs.
+ *
+ * @param string   $article_type Article type for the post's type ('' when it has none).
+ * @param bool     $is_front     Whether it is the front page (no breadcrumb trail).
+ * @param bool     $is_index     Whether it is the posts page (a CollectionPage).
+ * @param string[] $disabled     Kinds switched off in settings.
+ * @param string[] $declared     Types the page's own schema already declares.
+ * @return string[] Type names.
+ */
+function lcp_yeast_seo_auto_schema_kind_types( $article_type, $is_front, $is_index, array $disabled, array $declared ) {
+	$groups = lcp_yeast_seo_auto_schema_type_groups();
+	$wanted = array(
+		'website'    => 'WebSite',
+		'webpage'    => $is_index ? 'CollectionPage' : 'WebPage',
+		'article'    => $is_front || $is_index ? '' : $article_type,
+		'breadcrumb' => $is_front ? '' : 'BreadcrumbList',
+	);
+	$types  = array();
+
+	foreach ( $wanted as $kind => $type ) {
+		if ( '' === $type || in_array( $kind, $disabled, true ) || array_intersect( $groups[ $kind ], $declared ) ) {
+			continue;
+		}
+
+		$types[] = $type;
+	}
+
+	return $types;
+}
+
+/**
+ * The schema types generated automatically for a post, as shown in the admin
+ * list. Cannot know what a theme block prints on the page itself, so this is
+ * what the plugin adds where nothing else provides it.
+ *
+ * @param int      $post_id  Post ID.
+ * @param string[] $declared Types the post's own schema field declares.
+ * @return string[] Type names, empty when automatic schema doesn't apply.
+ */
+function lcp_yeast_seo_auto_schema_types_for_post( $post_id, array $declared = array() ) {
+	$post_type = get_post_type( $post_id );
+
+	if ( lcp_yeast_seo_yoast_active() || ! lcp_yeast_seo_schema_enabled() || ! lcp_yeast_seo_auto_schema_enabled() || ! in_array( $post_type, lcp_yeast_seo_post_types(), true ) ) {
+		return array();
+	}
+
+	$article_types = (array) apply_filters( 'lcp_yeast_seo_auto_schema_article_types', array( 'post' => 'BlogPosting' ) );
+	$is_front      = 'page' === get_option( 'show_on_front' ) && (int) get_option( 'page_on_front' ) === (int) $post_id;
+	$is_index      = (int) get_option( 'page_for_posts' ) === (int) $post_id;
+
+	return lcp_yeast_seo_auto_schema_kind_types( (string) ( $article_types[ $post_type ] ?? '' ), $is_front, $is_index, lcp_yeast_seo_auto_schema_disabled_kinds(), $declared );
+}
+
+/**
  * Plain-text title of a post, ready for JSON.
  *
  * @param int $post_id Post ID.

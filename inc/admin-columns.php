@@ -80,19 +80,22 @@ function lcp_yeast_seo_render_posts_custom_column( $column, $post_id ) {
 	}
 }
 /**
- * Builds the Schema column cell: a green tick when the page outputs schema, an
- * orange "!" when it outputs more than one block (its own JSON-LD plus the
- * settings-driven Organization), and a red cross when it outputs none. The
- * tooltip says which.
+ * Builds the Schema column cell: a green tick when the page outputs its own
+ * schema, an orange "!" when it outputs more than one block (its own JSON-LD
+ * plus the settings-driven Organization), a muted grey "A" when it has none of
+ * its own but the plugin generates schema for it (the normal case, so it is
+ * kept quiet), and a red cross when it outputs
+ * none at all. The tooltip says which.
  *
  * @param int $post_id Post ID.
  * @return string HTML.
  */
 function lcp_yeast_seo_schema_column_html( $post_id ) {
-	$sources = array();
-	$notes   = array();
-	$value   = trim( (string) get_post_meta( $post_id, LCP_YEAST_SEO_SCHEMA_META_KEY, true ) );
-	$own_org = false;
+	$sources  = array();
+	$notes    = array();
+	$declared = array();
+	$value    = trim( (string) get_post_meta( $post_id, LCP_YEAST_SEO_SCHEMA_META_KEY, true ) );
+	$own_org  = false;
 
 	if ( '' !== $value ) {
 		$data  = json_decode( $value, true );
@@ -105,6 +108,7 @@ function lcp_yeast_seo_schema_column_html( $post_id ) {
 			foreach ( $nodes as $node ) {
 				$types = array_merge( $types, array_map( 'strval', (array) ( $node['@type'] ?? array() ) ) );
 			}
+			$declared  = array_values( array_unique( $types ) );
 			$own_org   = (bool) array_intersect( $types, LCP_YEAST_SEO_ORGANIZATION_TYPES );
 			$sources[] = sprintf( /* translators: %s: schema types. */ __( 'Custom JSON-LD (%s)', 'lcp-yeast-seo' ), implode( ', ', array_unique( $types ) ) );
 		}
@@ -118,7 +122,13 @@ function lcp_yeast_seo_schema_column_html( $post_id ) {
 		}
 	}
 
-	if ( ! $sources ) {
+	$auto = lcp_yeast_seo_auto_schema_types_for_post( $post_id, $declared );
+
+	if ( ! $sources && $auto ) {
+		$symbol = 'A';
+		$colour = '#8c8f94';
+		$label  = sprintf( /* translators: %s: schema types. */ __( 'Generated automatically (%s), where the page does not already have them', 'lcp-yeast-seo' ), implode( ', ', $auto ) );
+	} elseif ( ! $sources ) {
 		$symbol = '&#10007;';
 		$colour = '#b32d2e';
 		$label  = $notes ? $notes[0] : __( 'No schema', 'lcp-yeast-seo' );
@@ -130,6 +140,10 @@ function lcp_yeast_seo_schema_column_html( $post_id ) {
 		$symbol = '&#10003;';
 		$colour = '#007017';
 		$label  = $sources[0];
+	}
+
+	if ( $sources && $auto ) {
+		$label .= ' + ' . sprintf( /* translators: %s: schema types. */ __( 'automatic (%s)', 'lcp-yeast-seo' ), implode( ', ', $auto ) );
 	}
 
 	return '<span class="lcp-yeast-seo-schema-status" style="color:' . esc_attr( $colour ) . '" title="' . esc_attr( $label ) . '"><span aria-hidden="true">' . $symbol . '</span><span class="screen-reader-text">' . esc_html( $label ) . '</span></span>';

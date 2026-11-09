@@ -297,6 +297,27 @@ class AutoSchemaTest extends TestCase {
 		$this->assertArrayNotHasKey( 'bogus', $out );
 	}
 
+	public function test_admin_list_types_for_a_post() {
+		$this->assertSame(
+			array( 'WebSite', 'WebPage', 'BlogPosting', 'BreadcrumbList' ),
+			lcp_yeast_seo_auto_schema_kind_types( 'BlogPosting', false, false, array(), array() )
+		);
+	}
+
+	public function test_admin_list_types_for_a_page_front_page_and_posts_page() {
+		$this->assertSame( array( 'WebSite', 'WebPage', 'BreadcrumbList' ), lcp_yeast_seo_auto_schema_kind_types( '', false, false, array(), array() ) );
+		$this->assertSame( array( 'WebSite', 'WebPage' ), lcp_yeast_seo_auto_schema_kind_types( '', true, false, array(), array() ), 'a static front page is a plain page with no breadcrumb trail' );
+		$this->assertSame( array( 'WebSite', 'CollectionPage', 'BreadcrumbList' ), lcp_yeast_seo_auto_schema_kind_types( 'BlogPosting', false, true, array(), array() ), 'the posts page is a listing, not an article' );
+	}
+
+	public function test_admin_list_types_respect_switches_and_the_pages_own_schema() {
+		$this->assertSame(
+			array( 'WebSite', 'WebPage' ),
+			lcp_yeast_seo_auto_schema_kind_types( 'BlogPosting', false, false, array( 'breadcrumb' ), array( 'BlogPosting' ) )
+		);
+		$this->assertSame( array(), lcp_yeast_seo_auto_schema_kind_types( '', false, false, array( 'website', 'webpage', 'breadcrumb' ), array() ) );
+	}
+
 	public function test_output_encodes_as_valid_json() {
 		$json = json_encode( lcp_yeast_seo_build_auto_graph( $this->context() ), JSON_UNESCAPED_SLASHES );
 
