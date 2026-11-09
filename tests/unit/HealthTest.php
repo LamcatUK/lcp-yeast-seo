@@ -166,14 +166,33 @@ class HealthTest extends TestCase {
 				'datePublished' => 'x',
 				'author'    => array( '@type' => 'Person', 'name' => 's' ),
 				'image'     => 'http://example.test/i.jpg',
-				'publisher' => array( '@id' => 'http://example.test/#organization' ),
+				'publisher' => array( '@id' => 'http://example.test/a/#publisher' ),
 			)
 		);
 
 		$result = $this->analyze( $this->page( $html ) );
 
 		$this->assertSame( array( 'dangling_ref' ), $this->codes( $result ) );
-		$this->assertStringContainsString( '#organization', $result['issues'][0]['message'] );
+		$this->assertStringContainsString( '#publisher', $result['issues'][0]['message'] );
+	}
+
+	public function test_references_to_the_home_page_organization_and_website_are_not_flagged() {
+		$page = static function ( $ref ) {
+			return array(
+				'@context' => 'https://schema.org',
+				'@type'    => 'WebPage',
+				'name'     => 'A',
+				'about'    => array( '@id' => $ref ),
+			);
+		};
+
+		foreach ( array( 'http://example.test/#organization', 'http://example.test/#website', 'http://example.test#organization' ) as $ref ) {
+			$this->assertNotContains( 'dangling_ref', $this->codes( $this->analyze( $this->page( $this->ld( $page( $ref ) ) ) ) ), $ref );
+		}
+
+		foreach ( array( 'http://example.test/blog/#organization', 'http://example.test/#person' ) as $ref ) {
+			$this->assertContains( 'dangling_ref', $this->codes( $this->analyze( $this->page( $this->ld( $page( $ref ) ) ) ) ), $ref );
+		}
 	}
 
 	public function test_references_to_plain_urls_and_other_sites_are_not_flagged() {

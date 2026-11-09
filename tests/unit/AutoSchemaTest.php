@@ -324,4 +324,19 @@ class AutoSchemaTest extends TestCase {
 		$this->assertNotFalse( $json );
 		$this->assertSame( JSON_ERROR_NONE, json_last_error() );
 	}
+
+	public function test_the_webpage_only_points_at_a_website_the_plugin_prints() {
+		$mine   = lcp_yeast_seo_build_auto_graph( $this->context() );
+		$theirs = lcp_yeast_seo_build_auto_graph( $this->context( array( 'declared_types' => array( 'WebSite' ) ) ) );
+		$off    = lcp_yeast_seo_build_auto_graph( $this->context( array( 'disabled_kinds' => array( 'website' ) ) ) );
+		$page   = static function ( array $nodes ) {
+			return array_values( array_filter( $nodes, static function ( $node ) {
+				return 'WebPage' === $node['@type'];
+			} ) )[0];
+		};
+
+		$this->assertSame( 'http://example.test/#website', $page( $mine )['isPartOf']['@id'] );
+		$this->assertArrayNotHasKey( 'isPartOf', $page( $theirs ), 'a theme-supplied WebSite has no @id to point at' );
+		$this->assertArrayNotHasKey( 'isPartOf', $page( $off ) );
+	}
 }

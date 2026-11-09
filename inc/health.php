@@ -209,6 +209,10 @@ function lcp_yeast_seo_health_analyze( $html, $site_host ) {
 
 		$host = wp_parse_url( $ref, PHP_URL_HOST );
 
+		if ( lcp_yeast_seo_health_is_site_entity_ref( $ref ) ) {
+			continue;
+		}
+
 		if ( $host && $host === $site_host ) {
 			$push( 'warning', 'dangling_ref', 'Something refers to ' . $ref . ', which is not defined on this page.' );
 		}
@@ -231,6 +235,22 @@ function lcp_yeast_seo_health_analyze( $html, $site_host ) {
 		'types'  => $types,
 		'blocks' => count( $blocks ),
 	);
+}
+
+/**
+ * Whether a reference names the site's own Organization or WebSite, the two
+ * entities that belong on the home page alone. Other pages point at them by
+ * @id, which is deliberate and not worth a warning.
+ *
+ * @param string $ref An @id reference.
+ * @return bool
+ */
+function lcp_yeast_seo_health_is_site_entity_ref( $ref ) {
+	$parts = wp_parse_url( (string) $ref );
+
+	return in_array( $parts['fragment'] ?? '', array( 'organization', 'website' ), true )
+		&& in_array( $parts['path'] ?? '', array( '', '/' ), true )
+		&& empty( $parts['query'] );
 }
 
 /**

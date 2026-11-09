@@ -3,7 +3,7 @@ Tags: seo, schema, sitemap, meta description, open graph
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 0.12.0
+Stable tag: 0.12.2
 
 Per-post SEO controls for titles, descriptions, social tags, canonical URLs and schema, with XML sitemaps. Built to replace Yoast one feature at a time.
 
@@ -33,6 +33,12 @@ After every deploy, run the smoke test against the live site. It checks the site
     LCP_SMOKE_URL=https://example.com LCP_SMOKE_ARCHIVE=/guides/ composer test:smoke
 
 == Changelog ==
+
+= 0.12.2 =
+* Health: references to the site's own Organization or WebSite (`/#organization`, `/#website`) are no longer reported as undefined on pages that don't print them. Those two entities belong on the home page, and other pages pointing at them by `@id` is a normal pattern. Any other undefined reference is still reported.
+
+= 0.12.1 =
+* Fix: on a theme that marks up the site as a WebSite itself (microdata such as `itemtype="http://schema.org/WebSite"` on the body), the plugin stood down from printing its own WebSite but still pointed each page's `isPartOf` at `#website`, so the reference matched nothing. It now only adds that reference when it prints the WebSite itself.
 
 = 0.12.0 =
 * New: the Health tab now checks each page's search listing as well as its schema. Per page it reports a missing or empty title or meta description (errors), titles over 60 or under 15 characters and descriptions over 160 or under 70 (warnings), a missing canonical link or one that points elsewhere, a missing or repeated H1, and missing `og:title` / `og:image`. The same title or description used on more than one page is an error. Pages marked noindex are only noted, since they aren't meant to appear in results.

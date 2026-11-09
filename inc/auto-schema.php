@@ -158,8 +158,11 @@ function lcp_yeast_seo_build_auto_graph( array $ctx ) {
 			'@id'      => $webpage_id,
 			'url'      => $url,
 			'name'     => $page['name'],
-			'isPartOf' => array( '@id' => $website_id ),
 		);
+
+		if ( ! $has( 'website' ) ) {
+			$webpage['isPartOf'] = array( '@id' => $website_id );
+		}
 
 		if ( ! empty( $page['description'] ) ) {
 			$webpage['description'] = $page['description'];
