@@ -39,6 +39,19 @@ function lcp_yeast_seo_get_setting( $key, $default = '' ) {
 }
 
 /**
+ * Reads an on/off setting, falling back to $default until it has been saved.
+ *
+ * @param string $key     Setting key.
+ * @param bool   $default Value when the setting has never been saved.
+ * @return bool
+ */
+function lcp_yeast_seo_flag_setting( $key, $default = true ) {
+	$settings = get_option( LCP_YEAST_SEO_SETTINGS_OPTION, array() );
+
+	return isset( $settings[ $key ] ) ? ! empty( $settings[ $key ] ) : $default;
+}
+
+/**
  * Sanitizes the plugin settings array.
  *
  * @param mixed $input Raw submitted settings.
@@ -53,6 +66,11 @@ function lcp_yeast_seo_sanitize_settings( $input ) {
 		'twitter_site'              => isset( $input['twitter_site'] ) ? sanitize_text_field( wp_unslash( $input['twitter_site'] ) ) : '',
 		'enable_sitemaps'           => empty( $input['enable_sitemaps'] ) ? '0' : '1',
 		'sitemap_post_types'        => lcp_yeast_seo_sanitize_sitemap_post_types( $input['sitemap_post_types'] ?? array() ),
+		'sitemap_images'            => empty( $input['sitemap_images'] ) ? '0' : '1',
+		'auto_schema'               => empty( $input['auto_schema'] ) ? '0' : '1',
+		'auto_description'          => empty( $input['auto_description'] ) ? '0' : '1',
+		'title_sep'                 => isset( $input['title_sep'] ) ? lcp_yeast_seo_sanitize_title_sep( wp_unslash( $input['title_sep'] ) ) : '|',
+		'title_templates'           => lcp_yeast_seo_sanitize_title_templates( $input['title_templates'] ?? array() ),
 	) + lcp_yeast_seo_sanitize_organization( $input );
 }
 
@@ -211,6 +229,39 @@ function lcp_yeast_seo_sanitize_organization( $input ) {
 }
 
 /**
+ * Sanitizes the title separator (one short symbol).
+ *
+ * @param mixed $value Raw value.
+ * @return string
+ */
+function lcp_yeast_seo_sanitize_title_sep( $value ) {
+	$value = trim( sanitize_text_field( (string) $value ) );
+
+	return '' === $value ? '|' : mb_substr( $value, 0, 3 );
+}
+
+/**
+ * Sanitizes the per-post-type title templates.
+ *
+ * @param mixed $input Submitted values, post type => template.
+ * @return array
+ */
+function lcp_yeast_seo_sanitize_title_templates( $input ) {
+	$input = is_array( $input ) ? $input : array();
+	$out   = array();
+
+	foreach ( lcp_yeast_seo_post_types() as $post_type ) {
+		$template = isset( $input[ $post_type ] ) ? trim( sanitize_text_field( wp_unslash( $input[ $post_type ] ) ) ) : '';
+
+		if ( '' !== $template ) {
+			$out[ $post_type ] = $template;
+		}
+	}
+
+	return $out;
+}
+
+/**
  * Sanitizes the per-post-type sitemap settings.
  *
  * @param mixed $input Submitted values.
@@ -261,6 +312,7 @@ function lcp_yeast_seo_register_settings_page() {
 	register_setting( 'lcp_yeast_seo_settings', LCP_YEAST_SEO_SETTINGS_OPTION, 'lcp_yeast_seo_sanitize_settings' );
 
 	add_settings_section( 'lcp_yeast_seo_schema', 'Schema', '__return_false', 'lcp-yeast-seo-schema' );
+	add_settings_section( 'lcp_yeast_seo_titles', 'Titles and descriptions', 'lcp_yeast_seo_render_titles_intro', 'lcp-yeast-seo' );
 	add_settings_section( 'lcp_yeast_seo_defaults', 'Defaults', '__return_false', 'lcp-yeast-seo' );
 	add_settings_section( 'lcp_yeast_seo_sitemaps', 'XML Sitemaps', '__return_false', 'lcp-yeast-seo' );
 	add_settings_section( 'lcp_yeast_seo_organization', 'Organization schema', 'lcp_yeast_seo_render_organization_intro', 'lcp-yeast-seo-schema' );
@@ -272,6 +324,20 @@ function lcp_yeast_seo_register_settings_page() {
 		'lcp-yeast-seo-schema',
 		'lcp_yeast_seo_schema'
 	);
+
+	if ( ! lcp_yeast_seo_yoast_active() ) {
+		add_settings_field(
+			'auto_schema',
+			'Automatic structured data',
+			'lcp_yeast_seo_render_auto_schema_field',
+			'lcp-yeast-seo-schema',
+			'lcp_yeast_seo_schema'
+		);
+	}
+
+	add_settings_field( 'title_sep', 'Title separator', 'lcp_yeast_seo_render_title_sep_field', 'lcp-yeast-seo', 'lcp_yeast_seo_titles' );
+	add_settings_field( 'title_templates', 'Title templates', 'lcp_yeast_seo_render_title_templates_field', 'lcp-yeast-seo', 'lcp_yeast_seo_titles' );
+	add_settings_field( 'auto_description', 'Automatic description', 'lcp_yeast_seo_render_auto_description_field', 'lcp-yeast-seo', 'lcp_yeast_seo_titles' );
 
 	add_settings_field(
 		'default_social_image',
@@ -301,6 +367,14 @@ function lcp_yeast_seo_register_settings_page() {
 		'sitemap_post_types',
 		'Included Post Types',
 		'lcp_yeast_seo_render_sitemap_post_types_field',
+		'lcp-yeast-seo',
+		'lcp_yeast_seo_sitemaps'
+	);
+
+	add_settings_field(
+		'sitemap_images',
+		'Images',
+		'lcp_yeast_seo_render_sitemap_images_field',
 		'lcp-yeast-seo',
 		'lcp_yeast_seo_sitemaps'
 	);
@@ -451,6 +525,101 @@ function lcp_yeast_seo_render_sitemap_post_types_field() {
 }
 
 /**
+ * Render the sitemap images checkbox.
+ *
+ * @return void
+ */
+function lcp_yeast_seo_render_sitemap_images_field() {
+	?>
+	<label>
+		<input type="hidden" name="<?php echo esc_attr( LCP_YEAST_SEO_SETTINGS_OPTION ); ?>[sitemap_images]" value="0">
+		<input type="checkbox" name="<?php echo esc_attr( LCP_YEAST_SEO_SETTINGS_OPTION ); ?>[sitemap_images]" value="1" <?php checked( lcp_yeast_seo_sitemap_images_enabled() ); ?>>
+		List each page's featured image and the images in its content (up to 10 per page).
+	</label>
+	<?php
+}
+
+/**
+ * Render the automatic structured data checkbox.
+ *
+ * @return void
+ */
+function lcp_yeast_seo_render_auto_schema_field() {
+	?>
+	<label>
+		<input type="hidden" name="<?php echo esc_attr( LCP_YEAST_SEO_SETTINGS_OPTION ); ?>[auto_schema]" value="0">
+		<input type="checkbox" name="<?php echo esc_attr( LCP_YEAST_SEO_SETTINGS_OPTION ); ?>[auto_schema]" value="1" <?php checked( lcp_yeast_seo_auto_schema_enabled() ); ?>>
+		Generate WebSite, WebPage, Article and BreadcrumbList data for pages and posts.
+	</label>
+	<p class="description">A type is only generated where the page's own schema field doesn't already declare it, so hand-written schema always wins.</p>
+	<?php
+}
+
+/**
+ * Intro text for the titles section.
+ *
+ * @return void
+ */
+function lcp_yeast_seo_render_titles_intro() {
+	if ( lcp_yeast_seo_yoast_active() ) {
+		echo '<p>Yoast SEO is active and builds the default titles and descriptions, so the templates below are not used. Per-post overrides still apply.</p>';
+		return;
+	}
+
+	echo '<p>Defaults for pages that have no title or description of their own. A page\'s own value is always used as typed.</p>';
+}
+
+/**
+ * Render the title separator field.
+ *
+ * @return void
+ */
+function lcp_yeast_seo_render_title_sep_field() {
+	?>
+	<input type="text" name="<?php echo esc_attr( LCP_YEAST_SEO_SETTINGS_OPTION ); ?>[title_sep]" value="<?php echo esc_attr( lcp_yeast_seo_title_sep() ); ?>" class="small-text" maxlength="3">
+	<p class="description">Used for <code>%sep%</code> in the templates below, e.g. <code>|</code>, <code>-</code> or <code>&middot;</code>.</p>
+	<?php
+}
+
+/**
+ * Render the per-post-type title template fields.
+ *
+ * @return void
+ */
+function lcp_yeast_seo_render_title_templates_field() {
+	$templates = lcp_yeast_seo_get_setting( 'title_templates', array() );
+	$templates = is_array( $templates ) ? $templates : array();
+
+	foreach ( lcp_yeast_seo_post_types() as $post_type ) {
+		$obj = get_post_type_object( $post_type );
+		?>
+		<p style="margin:0 0 8px;">
+			<label for="lcp-yeast-seo-tpl-<?php echo esc_attr( $post_type ); ?>"><?php echo esc_html( $obj ? $obj->labels->singular_name : $post_type ); ?> <code><?php echo esc_html( $post_type ); ?></code></label><br>
+			<input type="text" id="lcp-yeast-seo-tpl-<?php echo esc_attr( $post_type ); ?>" name="<?php echo esc_attr( LCP_YEAST_SEO_SETTINGS_OPTION ); ?>[title_templates][<?php echo esc_attr( $post_type ); ?>]" value="<?php echo esc_attr( $templates[ $post_type ] ?? '' ); ?>" class="large-text" placeholder="<?php echo esc_attr( 'e.g. ' . LCP_YEAST_SEO_DEFAULT_TITLE_TEMPLATE ); ?>">
+		</p>
+		<?php
+	}
+	?>
+	<p class="description">Leave a box empty to keep WordPress's normal title. Tags: <code>%title%</code> <code>%sitename%</code> <code>%tagline%</code> <code>%sep%</code>.</p>
+	<?php
+}
+
+/**
+ * Render the automatic description checkbox.
+ *
+ * @return void
+ */
+function lcp_yeast_seo_render_auto_description_field() {
+	?>
+	<label>
+		<input type="hidden" name="<?php echo esc_attr( LCP_YEAST_SEO_SETTINGS_OPTION ); ?>[auto_description]" value="0">
+		<input type="checkbox" name="<?php echo esc_attr( LCP_YEAST_SEO_SETTINGS_OPTION ); ?>[auto_description]" value="1" <?php checked( lcp_yeast_seo_auto_description_enabled() ); ?>>
+		When a page has no meta description, use its excerpt or the start of its content.
+	</label>
+	<?php
+}
+
+/**
  * Settings page HTML.
  *
  * @return void
@@ -461,24 +630,34 @@ function lcp_yeast_seo_render_settings_page() {
 		'schema'  => array( 'Schema', 'lcp-yeast-seo-schema' ),
 	);
 	// phpcs:ignore WordPress.Security.NonceVerification.Recommended
-	$active = isset( $_GET['tab'] ) && isset( $tabs[ $_GET['tab'] ] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : 'general';
+	$requested = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : 'general';
+	$is_tools  = 'import-export' === $requested;
+	$active    = isset( $tabs[ $requested ] ) ? $requested : 'general';
+	$tab_url   = static function ( $slug ) {
+		return add_query_arg( array( 'page' => 'lcp-yeast-seo', 'tab' => $slug ), admin_url( 'admin.php' ) );
+	};
 	?>
 	<div class="wrap">
 		<h1>Yeast SEO</h1>
-		<nav class="nav-tab-wrapper" data-lcp-tabs>
+		<nav class="nav-tab-wrapper" <?php echo $is_tools ? '' : 'data-lcp-tabs'; ?>>
 			<?php foreach ( $tabs as $slug => $tab ) : ?>
-				<a href="<?php echo esc_url( add_query_arg( array( 'page' => 'lcp-yeast-seo', 'tab' => $slug ), admin_url( 'admin.php' ) ) ); ?>" class="nav-tab<?php echo $slug === $active ? ' nav-tab-active' : ''; ?>" data-tab="<?php echo esc_attr( $slug ); ?>"><?php echo esc_html( $tab[0] ); ?></a>
+				<a href="<?php echo esc_url( $tab_url( $slug ) ); ?>" class="nav-tab<?php echo ! $is_tools && $slug === $active ? ' nav-tab-active' : ''; ?>" data-tab="<?php echo esc_attr( $slug ); ?>"><?php echo esc_html( $tab[0] ); ?></a>
 			<?php endforeach; ?>
+			<a href="<?php echo esc_url( $tab_url( 'import-export' ) ); ?>" class="nav-tab<?php echo $is_tools ? ' nav-tab-active' : ''; ?>">Import / Export</a>
 		</nav>
-		<form action="options.php" method="post">
-			<?php settings_fields( 'lcp_yeast_seo_settings' ); ?>
-			<?php foreach ( $tabs as $slug => $tab ) : ?>
-				<div class="lcp-yeast-seo-panel" data-panel="<?php echo esc_attr( $slug ); ?>" <?php echo $slug === $active ? '' : 'hidden'; ?>>
-					<?php do_settings_sections( $tab[1] ); ?>
-				</div>
-			<?php endforeach; ?>
-			<?php submit_button(); ?>
-		</form>
+		<?php if ( $is_tools ) : ?>
+			<?php lcp_yeast_seo_ie_render_tab(); ?>
+		<?php else : ?>
+			<form action="options.php" method="post">
+				<?php settings_fields( 'lcp_yeast_seo_settings' ); ?>
+				<?php foreach ( $tabs as $slug => $tab ) : ?>
+					<div class="lcp-yeast-seo-panel" data-panel="<?php echo esc_attr( $slug ); ?>" <?php echo $slug === $active ? '' : 'hidden'; ?>>
+						<?php do_settings_sections( $tab[1] ); ?>
+					</div>
+				<?php endforeach; ?>
+				<?php submit_button(); ?>
+			</form>
+		<?php endif; ?>
 	</div>
 	<?php
 }

@@ -6,6 +6,8 @@
   var el = wp.element.createElement;
   var Fragment = wp.element.Fragment;
   var useState = wp.element.useState;
+  var useEffect = wp.element.useEffect;
+  var apiFetch = wp.apiFetch;
   var __ = wp.i18n.__;
   var registerPlugin = wp.plugins.registerPlugin;
   var PluginMoreMenuItem = wp.editPost.PluginMoreMenuItem;
@@ -20,6 +22,37 @@
   var useSelect = wp.data.useSelect;
   var useDispatch = wp.data.useDispatch;
   var settings = window.lcpYeastSeoEditor;
+
+  var NO_DUPES = { title: [], description: [] };
+
+  function DuplicateNote(props) {
+    if (!props.items || !props.items.length) {
+      return null;
+    }
+
+    var links = [];
+
+    props.items.forEach(function (item, index) {
+      if (index) {
+        links.push(", ");
+      }
+
+      links.push(
+        el(
+          "a",
+          {
+            key: item.id,
+            href: item.link,
+            target: "_blank",
+            rel: "noopener noreferrer",
+          },
+          item.title || __("(no title)", "lcp-yeast-seo"),
+        ),
+      );
+    });
+
+    return el("p", { className: "lcp-yeast-seo-note" }, props.label + " ", links);
+  }
 
   function countText(value) {
     return (value || "").trim().length;
@@ -164,8 +197,14 @@
         postTitle: editor.getEditedPostAttribute("title") || "",
         slug: editor.getEditedPostAttribute("slug") || "",
         permalink: currentPost && currentPost.link ? currentPost.link : "",
+        postId: editor.getCurrentPostId(),
+        featuredMedia: editor.getEditedPostAttribute("featured_media") || 0,
       };
     }, []);
+
+    var dupeState = useState(NO_DUPES);
+    var dupes = dupeState[0];
+    var setDupes = dupeState[1];
 
     var editPost = useDispatch("core/editor").editPost;
 
@@ -189,6 +228,42 @@
     var canonicalUrl = postData.meta[settings.metaKeys.canonicalUrl] || "";
     var schema = postData.meta[settings.metaKeys.schema] || "";
     var titleCount = countText(title);
+
+    useEffect(
+      function () {
+        var query = (title || "").trim() + (description || "").trim();
+
+        if (!isOpen || !apiFetch || !query) {
+          setDupes(NO_DUPES);
+          return undefined;
+        }
+
+        var cancelled = false;
+        var timer = setTimeout(function () {
+          apiFetch({
+            path:
+              "/lcp-yeast-seo/v1/duplicates?" +
+              new URLSearchParams({
+                post_id: postData.postId || 0,
+                title: title,
+                description: description,
+              }).toString(),
+          })
+            .then(function (result) {
+              if (!cancelled) {
+                setDupes(result);
+              }
+            })
+            .catch(function () {});
+        }, 700);
+
+        return function () {
+          cancelled = true;
+          clearTimeout(timer);
+        };
+      },
+      [isOpen, title, description, postData.postId],
+    );
     var descriptionCount = countText(description);
     var resolvedUrl = previewUrl(postData.permalink, postData.slug);
     var previewTitle =
@@ -196,7 +271,9 @@
     var previewDescription =
       description ||
       __(
-        "Your meta description will appear here when set. Leave it blank to keep the default output.",
+        settings.autoDescription
+          ? "No description set. The page excerpt, or the start of its content, will be used."
+          : "Your meta description will appear here when set. Leave it blank to keep the default output.",
         "lcp-yeast-seo",
       );
     var previewOgTitle = ogTitle || previewTitle;
@@ -287,6 +364,10 @@
                   { className: countClass(titleCount, 30, 60) },
                   titleCount + " characters - " + guidance(titleCount, 30, 60),
                 ),
+                el(DuplicateNote, {
+                  items: dupes.title,
+                  label: __("Same title is also used on:", "lcp-yeast-seo"),
+                }),
                 el(TextareaControl, {
                   label: __("Meta description", "lcp-yeast-seo"),
                   value: description,
@@ -306,6 +387,10 @@
                     " characters - " +
                     guidance(descriptionCount, 70, 160),
                 ),
+                el(DuplicateNote, {
+                  items: dupes.description,
+                  label: __("Same description is also used on:", "lcp-yeast-seo"),
+                }),
                 el(SelectControl, {
                   label: __("Indexing", "lcp-yeast-seo"),
                   value: robotsIndex,
@@ -399,6 +484,17 @@
                     "lcp-yeast-seo",
                   ),
                 }),
+                !ogImage &&
+                  !postData.featuredMedia &&
+                  !settings.defaultSocialImage &&
+                  el(
+                    "p",
+                    { className: "lcp-yeast-seo-note lcp-yeast-seo-note--muted" },
+                    __(
+                      "No image is set here, as the featured image, or as the site default. Link previews will use the first image in the content, if there is one.",
+                      "lcp-yeast-seo",
+                    ),
+                  ),
                 el(ImageField, {
                   label: __("Twitter/X image", "lcp-yeast-seo"),
                   value: twitterImage,

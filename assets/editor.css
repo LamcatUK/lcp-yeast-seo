@@ -190,3 +190,13 @@ textarea.lcp-yeast-seo-schema-field {
 .lcp-yeast-seo-count--short {
   color: #996800;
 }
+
+.lcp-yeast-seo-note {
+  margin: -4px 0 12px;
+  font-size: 12px;
+  color: #8a5300;
+}
+
+.lcp-yeast-seo-note--muted {
+  color: #757575;
+}

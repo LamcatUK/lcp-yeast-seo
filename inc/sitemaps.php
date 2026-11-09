@@ -106,6 +106,70 @@ function lcp_yeast_seo_sitemap_url( $post_type, $page = 1 ) {
 }
 
 /**
+ * Whether sitemap entries list images.
+ *
+ * @return bool
+ */
+function lcp_yeast_seo_sitemap_images_enabled() {
+	return lcp_yeast_seo_flag_setting( 'sitemap_images', true );
+}
+
+/**
+ * Finds the image URLs in a chunk of HTML, in document order, without
+ * rendering anything. Root-relative URLs are resolved against the site; data
+ * URIs and anything that isn't http(s) are ignored.
+ *
+ * @param string $html     Post content.
+ * @param string $home_url Site home URL, with trailing slash.
+ * @return string[]
+ */
+function lcp_yeast_seo_extract_content_images( $html, $home_url ) {
+	if ( ! preg_match_all( '/<img\b[^>]*?\bsrc\s*=\s*(["\'])(.*?)\1/is', (string) $html, $matches ) ) {
+		return array();
+	}
+
+	$urls = array();
+
+	foreach ( $matches[2] as $src ) {
+		$src = trim( html_entity_decode( $src, ENT_QUOTES, 'UTF-8' ) );
+
+		if ( 0 === strpos( $src, '//' ) ) {
+			$src = 'https:' . $src;
+		} elseif ( 0 === strpos( $src, '/' ) ) {
+			$src = rtrim( $home_url, '/' ) . $src;
+		}
+
+		if ( preg_match( '#^https?://#i', $src ) ) {
+			$urls[] = $src;
+		}
+	}
+
+	return array_values( array_unique( $urls ) );
+}
+
+/**
+ * Image URLs for a post's sitemap entry: its lead image (featured, else the
+ * first block image, the same one used for og:image), then any other images in
+ * its content, up to a cap.
+ *
+ * @param int $post_id Post ID.
+ * @return string[]
+ */
+function lcp_yeast_seo_sitemap_post_images( $post_id ) {
+	$images = array();
+	$lead   = lcp_yeast_seo_get_post_image( $post_id );
+
+	if ( '' !== $lead ) {
+		$images[] = $lead;
+	}
+
+	$images = array_merge( $images, lcp_yeast_seo_extract_content_images( get_post_field( 'post_content', $post_id ), home_url( '/' ) ) );
+	$max    = max( 1, (int) apply_filters( 'lcp_yeast_seo_sitemap_max_images', 10 ) );
+
+	return array_slice( array_values( array_unique( $images ) ), 0, $max );
+}
+
+/**
  * Whether a given post should be excluded from sitemap output.
  *
  * @param int $post_id Post ID.
@@ -380,13 +444,22 @@ function lcp_yeast_seo_render_post_type_sitemap( $post_type, $page ) {
 		lcp_yeast_seo_output_sitemap_html( 'urlset', $rows, $post_type_object ? $post_type_object->labels->name : $post_type );
 	}
 
+	$with_images = lcp_yeast_seo_sitemap_images_enabled();
+
 	$xml  = '<?xml version="1.0" encoding="' . esc_attr( get_bloginfo( 'charset' ) ) . '"?>';
-	$xml .= '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">';
+	$xml .= '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"' . ( $with_images ? ' xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"' : '' ) . '>';
 
 	foreach ( $chunks[ $page - 1 ] as $post_id ) {
 		$xml .= '<url>';
 		$xml .= '<loc>' . esc_url( get_permalink( $post_id ) ) . '</loc>';
 		$xml .= '<lastmod>' . esc_html( get_post_modified_time( DATE_W3C, true, $post_id ) ) . '</lastmod>';
+
+		if ( $with_images ) {
+			foreach ( lcp_yeast_seo_sitemap_post_images( $post_id ) as $image_url ) {
+				$xml .= '<image:image><image:loc>' . esc_url( $image_url ) . '</image:loc></image:image>';
+			}
+		}
+
 		$xml .= '</url>';
 	}
 
@@ -429,3 +502,28 @@ function lcp_yeast_seo_maybe_render_sitemap() {
 	lcp_yeast_seo_output_sitemap_404();
 }
 add_action( 'template_redirect', 'lcp_yeast_seo_maybe_render_sitemap' );
+
+/**
+ * Adds the sitemap index to the virtual robots.txt.
+ *
+ * Has no effect when a physical robots.txt exists (the web server serves that
+ * instead), and when Yoast is active, which adds its own line.
+ *
+ * @param string     $output Robots.txt content so far.
+ * @param string|int $public Value of the blog_public option.
+ * @return string
+ */
+function lcp_yeast_seo_robots_txt( $output, $public ) {
+	if ( '0' === (string) $public || lcp_yeast_seo_yoast_active() || ! lcp_yeast_seo_sitemaps_enabled() ) {
+		return $output;
+	}
+
+	$line = 'Sitemap: ' . home_url( '/sitemap_index.xml' );
+
+	if ( false !== stripos( $output, $line ) ) {
+		return $output;
+	}
+
+	return rtrim( $output ) . "\n\n" . $line . "\n";
+}
+add_filter( 'robots_txt', 'lcp_yeast_seo_robots_txt', 10, 2 );

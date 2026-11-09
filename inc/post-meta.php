@@ -329,7 +329,7 @@ function lcp_yeast_seo_enqueue_block_editor_assets() {
 	wp_enqueue_script(
 		'lcp-yeast-seo-editor',
 		LCP_YEAST_SEO_URL . 'assets/editor.js',
-		array( 'wp-components', 'wp-data', 'wp-edit-post', 'wp-element', 'wp-i18n', 'wp-plugins' ),
+		array( 'wp-api-fetch', 'wp-components', 'wp-data', 'wp-edit-post', 'wp-element', 'wp-i18n', 'wp-plugins' ),
 		file_exists( $script_path ) ? filemtime( $script_path ) : LCP_YEAST_SEO_VERSION,
 		true
 	);
@@ -347,6 +347,7 @@ function lcp_yeast_seo_enqueue_block_editor_assets() {
 			array(
 				'schemaEnabled' => lcp_yeast_seo_schema_enabled(),
 				'yoastActive'   => lcp_yeast_seo_yoast_active(),
+				'autoDescription' => ! lcp_yeast_seo_yoast_active() && lcp_yeast_seo_auto_description_enabled(),
 				'blogPublic'    => (bool) get_option( 'blog_public' ),
 				'homeUrl'       => home_url( '/' ),
 				'defaultSocialImage' => lcp_yeast_seo_get_setting( 'default_social_image', '' ),
@@ -475,7 +476,7 @@ function lcp_yeast_seo_current_og_description() {
 		return $description;
 	}
 
-	return lcp_yeast_seo_current_description();
+	return lcp_yeast_seo_effective_description();
 }
 
 /**
@@ -832,6 +833,7 @@ function lcp_yeast_seo_render_frontend_meta() {
 
 	$post_id      = lcp_yeast_seo_current_post_id();
 	$title        = lcp_yeast_seo_current_og_title();
+	$meta_description = lcp_yeast_seo_effective_description();
 	$description  = lcp_yeast_seo_current_og_description();
 	$og_image     = lcp_yeast_seo_current_og_image();
 	$twitter_image = lcp_yeast_seo_current_twitter_image();
@@ -844,8 +846,8 @@ function lcp_yeast_seo_render_frontend_meta() {
 	// would misdescribe either to OG consumers.
 	$og_type      = is_singular() && ! is_front_page() ? 'article' : 'website';
 
-	if ( '' !== $description ) {
-		echo '<meta name="description" content="' . esc_attr( $description ) . '">' . "\n";
+	if ( '' !== $meta_description ) {
+		echo '<meta name="description" content="' . esc_attr( $meta_description ) . '">' . "\n";
 	}
 
 	echo '<meta property="og:type" content="' . esc_attr( $og_type ) . '">' . "\n";

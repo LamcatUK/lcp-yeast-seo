@@ -40,9 +40,33 @@ one feature at a time.
   page, taxonomy/post-type/author archives) — WordPress core only ever
   outputs one for singular content, so anything else was left without a
   canonical entirely when Yoast isn't active to fill the gap.
-- Generates a Yoast-style XML sitemap index at `sitemap_index.xml`, with
-  separate post-type sitemap files including custom post types, and settings
-  to enable/disable sitemap output per post type.
+- Generates an XML sitemap index at `sitemap_index.xml`, with separate
+  post-type sitemap files including custom post types, settings to
+  enable/disable sitemap output per post type, and image entries
+  (`image:image`) for each page's lead and content images. Sitemap URLs are
+  served without a trailing slash, and the index is added to the virtual
+  `robots.txt`.
+- **Title templates**: a per-post-type pattern such as
+  `%title% %sep% %sitename%` (tags `%title%`, `%sitename%`, `%tagline%`,
+  `%sep%`) used where a page has no title of its own. Empty means
+  WordPress's normal title. The front page is left alone.
+- **Automatic description**: where a page has no meta description, its
+  excerpt or the start of its content (about 160 characters, cut at a word)
+  is used for the description and as the social description fallback.
+- **Automatic structured data** (when Yoast is not active): a `@graph` of
+  `WebSite`, `WebPage` (or `CollectionPage` for the posts page), `Article`
+  for posts, the lead image and a `BreadcrumbList`. A type is skipped where
+  the page's own schema field already declares it. Switch off under
+  **Yeast SEO → Schema**. Filter: `lcp_yeast_seo_auto_schema_nodes`;
+  `lcp_yeast_seo_auto_schema_article_types` maps post types to Article types.
+- **Import / Export tab**: CSV or XLSX import of titles and descriptions by
+  URL (with dry run), CSV export from Yeast, Yoast, Rank Math or SEOPress
+  with their template variables resolved, and direct migration from those
+  plugins. The CSV format (`URL`, `Meta Title`, `Meta Description`) matches
+  the standalone cbp-update-metadata plugin.
+- **Editor checks**: the modal quietly notes, under the field, when another
+  page uses the same title or description, and when no social image is set.
+  Nothing blocks saving.
 - If the saved schema declares an `Organization` node, Yoast's own
   Organization node is suppressed on that page (via the
   `wpseo_schema_needs_organization` filter) so there's no duplicate —
@@ -59,13 +83,14 @@ one feature at a time.
 
 ## Settings
 
-**Settings → LCP Yeast SEO** now covers:
+**Yeast SEO** in the admin menu has three tabs:
 
-- schema on/off,
-- default social image,
-- optional `twitter:site` handle,
-- XML sitemap on/off,
-- and per-post-type sitemap inclusion settings.
+- **General**: title separator and templates, automatic description,
+  default social image, `twitter:site` handle, XML sitemaps on/off,
+  per-post-type sitemap inclusion and sitemap images.
+- **Schema**: schema on/off, automatic structured data, and the
+  Organization JSON-LD with its display rules.
+- **Import / Export**: see above.
 
 Turning schema off stops schema output and hides the schema field from the
 editor UI, but never touches already-saved field content.
@@ -75,12 +100,31 @@ editor UI, but never touches already-saved field content.
 - **FAQPage schema** — each theme handles its own FAQ block/accumulator
   differently, and not every theme installing this plugin will have one.
   Left in the theme, not centralised here.
-- **Breadcrumb microdata** — out of scope for now.
+- **Breadcrumb microdata** — breadcrumb *schema* is generated, but the
+  plugin does not render visible breadcrumbs.
+- **Redirects** — use a dedicated plugin such as Redirection.
 - **Category/tag/term sitemaps** — deliberately omitted.
 
 ## Requirements
 
 - WordPress with the block editor (native post meta + `add_meta_box()`).
-- Yoast SEO active, for the Organization-suppression filter to have any
-  effect — the plugin still registers the field and outputs schema without
-  it, the filter hook is just a no-op if Yoast isn't there to call it.
+- Runs on its own. If Yoast SEO is active, Yoast's titles, descriptions and
+  graph are left in charge (templates, automatic description and automatic
+  structured data stand down), and the Organization-suppression filter
+  applies.
+
+## Testing
+
+```
+composer install
+composer test                                   # unit tests, no WordPress or database
+LCP_SMOKE_URL=https://example.com composer test:smoke   # run after every deploy
+```
+
+The smoke test fetches the live sitemaps and checks they are served directly
+(no redirects), are valid XML, and only use tags search engines accept.
+
+## Versioning
+
+Bump the version in `lcp-yeast-seo.php` (header and `LCP_YEAST_SEO_VERSION`)
+and add a `readme.txt` changelog entry with every significant change.
