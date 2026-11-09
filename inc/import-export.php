@@ -1051,7 +1051,6 @@ function lcp_yeast_seo_ie_render_result() {
 			</form>
 		<?php endif; ?>
 	<?php endif; ?>
-	<hr>
 	<?php
 	delete_transient( $key );
 }
@@ -1067,8 +1066,12 @@ function lcp_yeast_seo_ie_render_tab() {
 
 	lcp_yeast_seo_ie_render_result();
 	?>
-	<h2>Export</h2>
-	<p>Download a CSV of titles and descriptions. It uses the same <code>URL</code>, <code>Meta Title</code> and <code>Meta Description</code> columns as import, with site-relative URLs, so the file works on any copy of the site. Template variables such as <code>%%title%%</code> are filled in.</p>
+	<section class="lcp-ys-card">
+		<div class="lcp-ys-card__head">
+			<h2>Export</h2>
+			<div class="lcp-ys-card__intro"><p>Download a CSV of titles and descriptions. It uses the same <code>URL</code>, <code>Meta Title</code> and <code>Meta Description</code> columns as import, with site-relative URLs, so the file works on any copy of the site. Template variables such as <code>%%title%%</code> are filled in.</p></div>
+		</div>
+		<div class="lcp-ys-body">
 	<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 		<input type="hidden" name="action" value="lcp_yeast_seo_export">
 		<?php wp_nonce_field( LCP_YEAST_SEO_IE_NONCE ); ?>
@@ -1094,11 +1097,15 @@ function lcp_yeast_seo_ie_render_tab() {
 		</table>
 		<?php submit_button( 'Download CSV', 'primary', 'submit', false ); ?>
 	</form>
+		</div>
+	</section>
 
-	<hr>
-
-	<h2>Import</h2>
-	<p>Upload a CSV or XLSX with a header row of <code>URL</code>, <code>Meta Title</code> and/or <code>Meta Description</code>. Rows are matched to pages by URL, and ambiguous matches are skipped rather than guessed.</p>
+	<section class="lcp-ys-card">
+		<div class="lcp-ys-card__head">
+			<h2>Import</h2>
+			<div class="lcp-ys-card__intro"><p>Upload a CSV or XLSX with a header row of <code>URL</code>, <code>Meta Title</code> and/or <code>Meta Description</code>. Rows are matched to pages by URL, and ambiguous matches are skipped rather than guessed.</p></div>
+		</div>
+		<div class="lcp-ys-body">
 	<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" enctype="multipart/form-data">
 		<input type="hidden" name="action" value="lcp_yeast_seo_import">
 		<?php wp_nonce_field( LCP_YEAST_SEO_IE_NONCE ); ?>
@@ -1124,11 +1131,15 @@ function lcp_yeast_seo_ie_render_tab() {
 		</table>
 		<?php submit_button( 'Process file', 'primary', 'submit', false ); ?>
 	</form>
+		</div>
+	</section>
 
-	<hr>
-
-	<h2>Migrate from another SEO plugin</h2>
-	<p>Copies titles and descriptions straight from another plugin's data on this site, with its template variables filled in. Nothing is deleted from the other plugin.</p>
+	<section class="lcp-ys-card">
+		<div class="lcp-ys-card__head">
+			<h2>Migrate from another SEO plugin</h2>
+			<div class="lcp-ys-card__intro"><p>Copies titles and descriptions straight from another plugin's data on this site, with its template variables filled in. Nothing is deleted from the other plugin.</p></div>
+		</div>
+		<div class="lcp-ys-body">
 	<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 		<input type="hidden" name="action" value="lcp_yeast_seo_migrate">
 		<?php wp_nonce_field( LCP_YEAST_SEO_IE_NONCE ); ?>
@@ -1165,5 +1176,7 @@ function lcp_yeast_seo_ie_render_tab() {
 		</table>
 		<?php submit_button( 'Migrate', 'primary', 'submit', false ); ?>
 	</form>
+		</div>
+	</section>
 	<?php
 }

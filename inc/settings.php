@@ -690,32 +690,31 @@ function lcp_yeast_seo_render_settings_page() {
 	);
 	// phpcs:ignore WordPress.Security.NonceVerification.Recommended
 	$requested = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : 'general';
-	$is_tools  = 'import-export' === $requested;
-	$active    = isset( $tabs[ $requested ] ) ? $requested : 'general';
+	$is_tool   = in_array( $requested, array( 'health', 'import-export' ), true );
+	$active    = $is_tool ? $requested : ( isset( $tabs[ $requested ] ) ? $requested : 'general' );
 	$tab_url   = static function ( $slug ) {
 		return add_query_arg( array( 'page' => 'lcp-yeast-seo', 'tab' => $slug ), admin_url( 'admin.php' ) );
 	};
 	?>
-	<div class="wrap">
-		<h1>Yeast SEO</h1>
+	<div class="wrap lcp-ys">
+		<?php lcp_yeast_seo_render_admin_header( $tabs, $active, ! $is_tool, $tab_url ); ?>
 		<?php settings_errors(); ?>
-		<nav class="nav-tab-wrapper" <?php echo $is_tools ? '' : 'data-lcp-tabs'; ?>>
-			<?php foreach ( $tabs as $slug => $tab ) : ?>
-				<a href="<?php echo esc_url( $tab_url( $slug ) ); ?>" class="nav-tab<?php echo ! $is_tools && $slug === $active ? ' nav-tab-active' : ''; ?>" data-tab="<?php echo esc_attr( $slug ); ?>"><?php echo esc_html( $tab[0] ); ?></a>
-			<?php endforeach; ?>
-			<a href="<?php echo esc_url( $tab_url( 'import-export' ) ); ?>" class="nav-tab<?php echo $is_tools ? ' nav-tab-active' : ''; ?>">Import / Export</a>
-		</nav>
-		<?php if ( $is_tools ) : ?>
+		<?php if ( 'health' === $active ) : ?>
+			<?php lcp_yeast_seo_health_render_tab(); ?>
+		<?php elseif ( 'import-export' === $active ) : ?>
 			<?php lcp_yeast_seo_ie_render_tab(); ?>
 		<?php else : ?>
 			<form action="options.php" method="post">
 				<?php settings_fields( 'lcp_yeast_seo_settings' ); ?>
 				<?php foreach ( $tabs as $slug => $tab ) : ?>
 					<div class="lcp-yeast-seo-panel" data-panel="<?php echo esc_attr( $slug ); ?>" <?php echo $slug === $active ? '' : 'hidden'; ?>>
-						<?php do_settings_sections( $tab[1] ); ?>
+						<?php lcp_yeast_seo_render_sections( $tab[1] ); ?>
 					</div>
 				<?php endforeach; ?>
-				<?php submit_button(); ?>
+				<div class="lcp-ys-savebar">
+					<?php submit_button( 'Save changes', 'primary', 'submit', false ); ?>
+					<span class="lcp-ys-savebar__hint">Changes on every tab are saved together.</span>
+				</div>
 			</form>
 			<?php if ( is_file( lcp_yeast_seo_robots_file_path() ) ) : ?>
 				<form id="lcp-yeast-seo-robots-takeover" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">

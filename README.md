@@ -69,6 +69,13 @@ one feature at a time.
   with their template variables resolved, and direct migration from those
   plugins. The CSV format (`URL`, `Meta Title`, `Meta Description`) matches
   the standalone cbp-update-metadata plugin.
+- **Health tab**: scans every page in your sitemaps as a visitor gets it, so
+  schema printed by a theme block is judged along with the plugin's own, and
+  reports pages with no structured data, invalid JSON-LD, duplicate entities,
+  `@id` references that point nowhere, and missing recommended properties
+  (articles, breadcrumbs, FAQs, local businesses). Each problem comes with a
+  fix, the most widespread are listed first, and a page can be re-checked
+  alone. A starter jar fills with the share of healthy pages.
 - **robots.txt editor** (own tab): rules saved there replace WordPress's
   default file. Saving is blocked if they would hide the whole site from
   Google or Bing, or exceed 500 KiB, unless overridden; other likely mistakes
@@ -94,7 +101,7 @@ one feature at a time.
 
 ## Settings
 
-**Yeast SEO** in the admin menu has four tabs:
+**Yeast SEO** in the admin menu has five tabs:
 
 - **General**: title separator and templates, automatic description,
   default social image, `twitter:site` handle, XML sitemaps on/off,
@@ -102,6 +109,7 @@ one feature at a time.
 - **Schema**: schema on/off, automatic structured data, and the
   Organization JSON-LD with its display rules.
 - **robots.txt**: the editor above.
+- **Health**: the scan above.
 - **Import / Export**: see above.
 
 Turning schema off stops schema output and hides the schema field from the

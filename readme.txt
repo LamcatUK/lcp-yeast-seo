@@ -3,7 +3,7 @@ Tags: seo, schema, sitemap, meta description, open graph
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 0.10.0
+Stable tag: 0.11.0
 
 Per-post SEO controls for titles, descriptions, social tags, canonical URLs and schema, with XML sitemaps. Built to replace Yoast one feature at a time.
 
@@ -33,6 +33,11 @@ After every deploy, run the smoke test against the live site. It checks the site
     LCP_SMOKE_URL=https://example.com LCP_SMOKE_ARCHIVE=/guides/ composer test:smoke
 
 == Changelog ==
+
+= 0.11.0 =
+* New: Health tab. Scans every page in your sitemaps the way a visitor gets it (so schema printed by theme blocks is included) and reports pages with no structured data, invalid JSON-LD, a missing `@context` or `@type`, duplicate entities, `@id` references that point at nothing, and missing recommended properties on articles, breadcrumbs, FAQs and local businesses. Each problem comes with a plain-language fix, "Fix these first" ranks the problems that affect the most pages, and any page can be checked again on its own. A starter jar shows the share of healthy pages.
+* New: refreshed admin design. A header band with live status chips and the tabs, settings sections as cards, a sticky save bar, and consistent styling on every tab.
+* Filters: `lcp_yeast_seo_health_max_pages` (default 500).
 
 = 0.10.0 =
 * New: robots.txt editor on its own tab. Rules saved there replace WordPress's default robots.txt, and the sitemap index line is still added automatically.
