@@ -11,6 +11,8 @@ defined( 'ABSPATH' ) || exit;
 
 define( 'LCP_YEAST_SEO_HEALTH_OPTION', 'lcp_yeast_seo_health' );
 define( 'LCP_YEAST_SEO_HEALTH_BATCH', 3 );
+define( 'LCP_YEAST_SEO_HEALTH_PAGE_TIMEOUT', 12 );
+define( 'LCP_YEAST_SEO_HEALTH_BUDGET', 20 );
 define( 'LCP_YEAST_SEO_HEALTH_TITLE_MIN', 15 );
 define( 'LCP_YEAST_SEO_HEALTH_TITLE_MAX', 60 );
 define( 'LCP_YEAST_SEO_HEALTH_DESCRIPTION_MIN', 70 );
@@ -681,7 +683,7 @@ function lcp_yeast_seo_health_hint( $code ) {
 		'faq_incomplete'           => 'Fill in every question and its answer in the FAQ block.',
 		'no_name'                  => 'Add a name to that entity in your Organization JSON-LD under Schema.',
 		'localbusiness_no_address' => 'Add a postal address to the LocalBusiness in your Organization JSON-LD under Schema.',
-		'fetch_failed'             => 'The server could not reach its own page. A firewall, basic authentication or a local address can cause this.',
+		'fetch_failed'             => 'The server could not fetch its own page, even through its own address. A firewall, bot protection, basic authentication or a very slow page can cause this. Use Check again, or see the lcp_yeast_seo_health_request_args filter to change the timeout or user agent.',
 		'meta_noindex'             => 'Either remove it from the sitemap by keeping it noindex, or turn noindex off in the page\'s Yeast SEO settings.',
 		'meta_no_title'            => 'Give the page a title in its Yeast SEO modal, or set a title template for its post type under General.',
 		'meta_title_long'          => 'Shorten the title in the page\'s Yeast SEO modal, putting the key words first.',
@@ -728,6 +730,106 @@ function lcp_yeast_seo_health_page_ids() {
 }
 
 /**
+ * Whether a fetch error means the server couldn't connect to the site at all
+ * (as opposed to the page being slow or answering with an error).
+ *
+ * @param string $message WP_Error message.
+ * @return bool
+ */
+function lcp_yeast_seo_health_is_connect_failure( $message ) {
+	return (bool) preg_match( '/failed to connect|could not connect|connection (?:timed out|refused)|cURL error (?:6|7):|could not resolve/i', (string) $message );
+}
+
+/**
+ * Addresses this server can be reached on from itself, best first.
+ *
+ * @return string[]
+ */
+function lcp_yeast_seo_health_local_ips() {
+	$ips = array();
+
+	foreach ( array( $_SERVER['SERVER_ADDR'] ?? '', '127.0.0.1' ) as $ip ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- validated by filter_var below.
+		if ( false !== filter_var( $ip, FILTER_VALIDATE_IP ) && ! in_array( $ip, $ips, true ) ) {
+			$ips[] = $ip;
+		}
+	}
+
+	return $ips;
+}
+
+/**
+ * wp_remote_get(), optionally sending the request to a chosen IP while keeping
+ * the site's hostname for the Host header and TLS name (curl --resolve).
+ *
+ * @param string $url  URL.
+ * @param array  $args Request args.
+ * @param string $ip   IP to connect to, or '' for normal DNS.
+ * @return array|\WP_Error
+ */
+function lcp_yeast_seo_health_remote_get( $url, array $args, $ip = '' ) {
+	if ( '' === $ip ) {
+		return wp_remote_get( $url, $args );
+	}
+
+	$parts = wp_parse_url( $url );
+	$host  = (string) ( $parts['host'] ?? '' );
+	$port  = (int) ( $parts['port'] ?? ( 'https' === ( $parts['scheme'] ?? '' ) ? 443 : 80 ) );
+	$hook  = static function ( $handle ) use ( $host, $port, $ip ) {
+		curl_setopt( $handle, CURLOPT_RESOLVE, array( $host . ':' . $port . ':' . $ip ) );
+	};
+
+	add_action( 'http_api_curl', $hook ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- core hook.
+	$response = wp_remote_get( $url, $args );
+	remove_action( 'http_api_curl', $hook ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- core hook.
+
+	return $response;
+}
+
+/**
+ * Fetches a page for the scan. If the server can't connect to the site's public
+ * address (a CDN, firewall or hosting set-up that blocks its own traffic),
+ * it retries through its own IP and remembers the route that worked.
+ *
+ * @param string $url  URL.
+ * @param array  $args Request args.
+ * @return array|\WP_Error
+ */
+function lcp_yeast_seo_health_fetch( $url, array $args ) {
+	$key    = 'lcp_yeast_seo_health_ip_' . md5( (string) wp_parse_url( $url, PHP_URL_HOST ) );
+	$cached = get_transient( $key );
+
+	if ( is_string( $cached ) && '' !== $cached ) {
+		$response = lcp_yeast_seo_health_remote_get( $url, $args, $cached );
+
+		if ( ! is_wp_error( $response ) || ! lcp_yeast_seo_health_is_connect_failure( $response->get_error_message() ) ) {
+			return $response;
+		}
+
+		delete_transient( $key );
+	}
+
+	$response = lcp_yeast_seo_health_remote_get( $url, $args );
+
+	if ( ! is_wp_error( $response ) || ! lcp_yeast_seo_health_is_connect_failure( $response->get_error_message() ) ) {
+		return $response;
+	}
+
+	$args['timeout'] = min( 8, (int) $args['timeout'] );
+
+	foreach ( lcp_yeast_seo_health_local_ips() as $ip ) {
+		$retry = lcp_yeast_seo_health_remote_get( $url, $args, $ip );
+
+		if ( ! is_wp_error( $retry ) ) {
+			set_transient( $key, $ip, HOUR_IN_SECONDS );
+
+			return $retry;
+		}
+	}
+
+	return $response;
+}
+
+/**
  * Fetches a post's public page and checks it.
  *
  * @param int $post_id Post ID.
@@ -743,14 +845,18 @@ function lcp_yeast_seo_health_check_post( $post_id ) {
 		'time'     => time(),
 		'modified' => (string) get_post_field( 'post_modified_gmt', $post_id ),
 	);
-	$response = wp_remote_get(
+	$response = lcp_yeast_seo_health_fetch(
 		add_query_arg( 'lcp_health', time(), $url ),
-		array(
-			'timeout'     => 20,
-			'redirection' => 3,
-			'sslverify'   => apply_filters( 'https_local_ssl_verify', false ), // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- core hook.
-			'user-agent'  => 'Yeast SEO health check',
-			'headers'     => array( 'Cache-Control' => 'no-cache' ),
+		(array) apply_filters(
+			'lcp_yeast_seo_health_request_args',
+			array(
+				'timeout'     => LCP_YEAST_SEO_HEALTH_PAGE_TIMEOUT,
+				'redirection' => 3,
+				'sslverify'   => apply_filters( 'https_local_ssl_verify', false ), // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- core hook.
+				'user-agent'  => 'Yeast SEO health check',
+				'headers'     => array( 'Cache-Control' => 'no-cache' ),
+			),
+			$post_id
 		)
 	);
 
@@ -810,12 +916,26 @@ function lcp_yeast_seo_health_ajax_check() {
 		wp_send_json_error( array( 'message' => 'You do not have permission to do that.' ), 403 );
 	}
 
+	ignore_user_abort( true );
+	wp_raise_memory_limit( 'admin' );
+
 	$ids     = isset( $_POST['ids'] ) ? array_slice( array_map( 'absint', (array) wp_unslash( $_POST['ids'] ) ), 0, LCP_YEAST_SEO_HEALTH_BATCH ) : array();
 	$allowed = lcp_yeast_seo_health_page_ids();
 	$results = lcp_yeast_seo_health_results();
 
+	$started = microtime( true );
+	$done    = array();
+
+	// Stop starting new pages once the budget is spent, so one request stays
+	// well inside the host's gateway timeout even when the site is slow to
+	// answer itself. The page tells the browser which were left for next time.
 	foreach ( array_intersect( $ids, $allowed ) as $post_id ) {
+		if ( $done && microtime( true ) - $started > LCP_YEAST_SEO_HEALTH_BUDGET ) {
+			break;
+		}
+
 		$results[ $post_id ] = lcp_yeast_seo_health_check_post( $post_id );
+		$done[]              = $post_id;
 	}
 
 	update_option( LCP_YEAST_SEO_HEALTH_OPTION, $results, false );
@@ -832,6 +952,7 @@ function lcp_yeast_seo_health_ajax_check() {
 		array(
 			'summary' => $summary,
 			'list'    => $list,
+			'done'    => array_merge( $done, array_diff( $ids, $allowed ) ),
 		)
 	);
 }

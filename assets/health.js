@@ -16,6 +16,10 @@
 
 	function post( ids ) {
 		var body = new URLSearchParams();
+		var controller = typeof AbortController === 'function' ? new AbortController() : null;
+		var timer = controller ? setTimeout( function () {
+			controller.abort();
+		}, config.requestTimeout * 1000 ) : null;
 
 		body.append( 'action', 'lcp_yeast_seo_health_check' );
 		body.append( '_ajax_nonce', config.nonce );
@@ -23,7 +27,7 @@
 			body.append( 'ids[]', id );
 		} );
 
-		return fetch( config.ajax, { method: 'POST', credentials: 'same-origin', body: body } )
+		return fetch( config.ajax, { method: 'POST', credentials: 'same-origin', body: body, signal: controller ? controller.signal : undefined } )
 			.then( function ( response ) {
 				return response.json();
 			} )
@@ -34,6 +38,15 @@
 
 				summary.innerHTML = result.data.summary;
 				list.innerHTML = result.data.list;
+
+				return ( result.data.done || [] ).map( Number );
+			} )
+			.then( function ( done ) {
+				clearTimeout( timer );
+				return done;
+			}, function ( error ) {
+				clearTimeout( timer );
+				throw error;
 			} );
 	}
 
@@ -51,34 +64,62 @@
 			return;
 		}
 
-		var ids = config.ids.slice();
-		var done = 0;
+		var queue = config.ids.map( Number );
+		var total = queue.length;
+		var finished = 0;
+		var skipped = 0;
+		var failures = 0;
+		var oneAtATime = false;
 
 		setBusy( true );
 		progress.hidden = false;
 		bar.style.width = '0%';
 
+		function advance( count ) {
+			finished += count;
+			bar.style.width = Math.round( ( 100 * finished ) / total ) + '%';
+		}
+
 		function next() {
-			if ( ! ids.length ) {
+			if ( ! queue.length ) {
 				bar.style.width = '100%';
-				status.textContent = 'Scan finished. ' + done + ' pages checked.';
+				status.textContent = 'Scan finished. ' + ( total - skipped ) + ' pages checked.'
+					+ ( skipped ? ' ' + skipped + ( 1 === skipped ? ' page' : ' pages' ) + ' did not answer in time and ' + ( 1 === skipped ? 'was' : 'were' ) + ' skipped. Use Check again on them.' : '' );
 				setBusy( false );
 				return;
 			}
 
-			var batch = ids.splice( 0, config.batch );
+			var batch = queue.splice( 0, oneAtATime ? 1 : config.batch );
 
-			status.textContent = 'Checking pages ' + ( done + 1 ) + ' to ' + ( done + batch.length ) + ' of ' + config.ids.length + '.';
+			status.textContent = 'Checking pages ' + ( finished + 1 ) + ' to ' + ( finished + batch.length ) + ' of ' + total + '.' + ( oneAtATime ? ' The site is slow to answer, so pages are checked one at a time.' : '' );
 
 			post( batch )
-				.then( function () {
-					done += batch.length;
-					bar.style.width = Math.round( ( 100 * done ) / config.ids.length ) + '%';
+				.then( function ( done ) {
+					failures = 0;
+					queue = batch.filter( function ( id ) {
+						return done.indexOf( id ) < 0;
+					} ).concat( queue );
+					advance( done.length );
 					next();
 				} )
-				.catch( function ( error ) {
-					status.textContent = 'The scan stopped after ' + done + ' pages. ' + error.message;
-					setBusy( false );
+				.catch( function () {
+					failures += 1;
+
+					if ( failures >= 5 ) {
+						status.textContent = 'The scan stopped after ' + finished + ' pages because the server stopped answering. Try again in a moment.';
+						setBusy( false );
+						return;
+					}
+
+					if ( batch.length > 1 ) {
+						queue = batch.concat( queue );
+						oneAtATime = true;
+					} else {
+						skipped += 1;
+						advance( 1 );
+					}
+
+					next();
 				} );
 		}
 

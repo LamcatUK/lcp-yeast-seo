@@ -36,6 +36,7 @@ function lcp_yeast_seo_admin_ui_assets( $hook ) {
 				'nonce' => wp_create_nonce( 'lcp_yeast_seo_health' ),
 				'ids'   => lcp_yeast_seo_health_page_ids(),
 				'batch' => LCP_YEAST_SEO_HEALTH_BATCH,
+				'requestTimeout' => LCP_YEAST_SEO_HEALTH_BUDGET + LCP_YEAST_SEO_HEALTH_PAGE_TIMEOUT + 15,
 			)
 		);
 	}

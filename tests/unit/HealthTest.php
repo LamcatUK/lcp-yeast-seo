@@ -452,4 +452,36 @@ class HealthTest extends TestCase {
 		$this->assertSame( 2, $problems[0]['pages'] );
 		$this->assertSame( 'Pages share the same title.', $problems[0]['message'] );
 	}
+
+	public function test_connection_failures_are_told_apart_from_slow_or_failed_pages() {
+		foreach ( array(
+			'cURL error 28: Failed to connect to www.example.test port 443 after 10001 ms: Timeout was reached',
+			'cURL error 7: Failed to connect to example.test port 443: Connection refused',
+			'cURL error 6: Could not resolve host: example.test',
+			'cURL error 28: Connection timed out after 10001 milliseconds',
+		) as $message ) {
+			$this->assertTrue( lcp_yeast_seo_health_is_connect_failure( $message ), $message );
+		}
+
+		foreach ( array(
+			'cURL error 28: Operation timed out after 12001 milliseconds with 0 bytes received',
+			'cURL error 60: SSL certificate problem',
+			'',
+		) as $message ) {
+			$this->assertFalse( lcp_yeast_seo_health_is_connect_failure( $message ), $message );
+		}
+	}
+
+	public function test_local_addresses_are_valid_unique_and_end_with_loopback() {
+		$_SERVER['SERVER_ADDR'] = '10.1.2.3';
+		$this->assertSame( array( '10.1.2.3', '127.0.0.1' ), lcp_yeast_seo_health_local_ips() );
+
+		$_SERVER['SERVER_ADDR'] = '127.0.0.1';
+		$this->assertSame( array( '127.0.0.1' ), lcp_yeast_seo_health_local_ips() );
+
+		$_SERVER['SERVER_ADDR'] = 'not an ip; rm -rf';
+		$this->assertSame( array( '127.0.0.1' ), lcp_yeast_seo_health_local_ips() );
+
+		unset( $_SERVER['SERVER_ADDR'] );
+	}
 }
