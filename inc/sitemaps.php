@@ -510,11 +510,11 @@ add_action( 'template_redirect', 'lcp_yeast_seo_maybe_render_sitemap' );
  * instead), and when Yoast is active, which adds its own line.
  *
  * @param string     $output Robots.txt content so far.
- * @param string|int $public Value of the blog_public option.
+ * @param bool|string|int $public Whether the site is public (a bool from current WordPress, '0'/'1' from older versions).
  * @return string
  */
 function lcp_yeast_seo_robots_txt( $output, $public ) {
-	if ( '0' === (string) $public || lcp_yeast_seo_yoast_active() || ! lcp_yeast_seo_sitemaps_enabled() ) {
+	if ( ! $public || lcp_yeast_seo_yoast_active() || ! lcp_yeast_seo_sitemaps_enabled() ) {
 		return $output;
 	}
 

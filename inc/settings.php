@@ -69,6 +69,7 @@ function lcp_yeast_seo_sanitize_settings( $input ) {
 		'sitemap_images'            => empty( $input['sitemap_images'] ) ? '0' : '1',
 		'auto_schema'               => empty( $input['auto_schema'] ) ? '0' : '1',
 		'auto_schema_kinds'         => lcp_yeast_seo_sanitize_auto_schema_kinds( $input['auto_schema_kinds'] ?? array() ),
+		'robots_txt'                => lcp_yeast_seo_sanitize_robots_setting( $input ),
 		'article_author'            => isset( $input['article_author'] ) && 'organization' === $input['article_author'] ? 'organization' : 'person',
 		'auto_description'          => empty( $input['auto_description'] ) ? '0' : '1',
 		'title_sep'                 => isset( $input['title_sep'] ) ? lcp_yeast_seo_sanitize_title_sep( wp_unslash( $input['title_sep'] ) ) : '|',
@@ -685,6 +686,7 @@ function lcp_yeast_seo_render_settings_page() {
 	$tabs = array(
 		'general' => array( 'General', 'lcp-yeast-seo' ),
 		'schema'  => array( 'Schema', 'lcp-yeast-seo-schema' ),
+		'robots'  => array( 'robots.txt', 'lcp-yeast-seo-robots' ),
 	);
 	// phpcs:ignore WordPress.Security.NonceVerification.Recommended
 	$requested = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : 'general';
@@ -696,6 +698,7 @@ function lcp_yeast_seo_render_settings_page() {
 	?>
 	<div class="wrap">
 		<h1>Yeast SEO</h1>
+		<?php settings_errors(); ?>
 		<nav class="nav-tab-wrapper" <?php echo $is_tools ? '' : 'data-lcp-tabs'; ?>>
 			<?php foreach ( $tabs as $slug => $tab ) : ?>
 				<a href="<?php echo esc_url( $tab_url( $slug ) ); ?>" class="nav-tab<?php echo ! $is_tools && $slug === $active ? ' nav-tab-active' : ''; ?>" data-tab="<?php echo esc_attr( $slug ); ?>"><?php echo esc_html( $tab[0] ); ?></a>
@@ -714,6 +717,12 @@ function lcp_yeast_seo_render_settings_page() {
 				<?php endforeach; ?>
 				<?php submit_button(); ?>
 			</form>
+			<?php if ( is_file( lcp_yeast_seo_robots_file_path() ) ) : ?>
+				<form id="lcp-yeast-seo-robots-takeover" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+					<input type="hidden" name="action" value="lcp_yeast_seo_robots_takeover">
+					<?php wp_nonce_field( 'lcp_yeast_seo_robots_takeover' ); ?>
+				</form>
+			<?php endif; ?>
 		<?php endif; ?>
 	</div>
 	<?php

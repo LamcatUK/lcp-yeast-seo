@@ -3,7 +3,7 @@ Tags: seo, schema, sitemap, meta description, open graph
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 0.9.1
+Stable tag: 0.10.0
 
 Per-post SEO controls for titles, descriptions, social tags, canonical URLs and schema, with XML sitemaps. Built to replace Yoast one feature at a time.
 
@@ -33,6 +33,14 @@ After every deploy, run the smoke test against the live site. It checks the site
     LCP_SMOKE_URL=https://example.com LCP_SMOKE_ARCHIVE=/guides/ composer test:smoke
 
 == Changelog ==
+
+= 0.10.0 =
+* New: robots.txt editor on its own tab. Rules saved there replace WordPress's default robots.txt, and the sitemap index line is still added automatically.
+* Safeguards: saving is blocked if the rules would hide the whole site from Google or Bing (`Disallow: /`) or exceed 500 KiB, unless "Save anyway" is ticked. Blocked CSS, JavaScript or images, typos in directives, rules before any User-agent line and relative Sitemap URLs are flagged as warnings.
+* A physical robots.txt in the site root is detected (the web server serves it instead of WordPress). "Take over" copies its rules into the editor and renames the file with a timestamp, keeping it.
+* Fix: the sitemap line is no longer added to robots.txt on sites set to discourage search engines (WordPress passes a boolean here in current versions, which the check didn't handle).
+* Fix: the settings page now shows its save notices (including warnings such as an invalid Organization JSON-LD). WordPress only prints them automatically on its own Settings pages, so they were being silently dropped.
+* After saving, a live check compares what the site really serves with the saved rules.
 
 = 0.9.1 =
 * The Schema column in admin lists shows a muted grey "A" for pages that have no schema of their own but get it generated automatically (the tooltip lists the types), instead of a red cross. Only exceptions use colour.

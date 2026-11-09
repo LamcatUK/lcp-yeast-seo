@@ -69,6 +69,12 @@ one feature at a time.
   with their template variables resolved, and direct migration from those
   plugins. The CSV format (`URL`, `Meta Title`, `Meta Description`) matches
   the standalone cbp-update-metadata plugin.
+- **robots.txt editor** (own tab): rules saved there replace WordPress's
+  default file. Saving is blocked if they would hide the whole site from
+  Google or Bing, or exceed 500 KiB, unless overridden; other likely mistakes
+  are flagged. A physical `robots.txt` in the site root is detected, and
+  "Take over" copies it into the editor and renames it (kept, timestamped).
+  A live check after saving confirms what the site really serves.
 - **Editor checks**: the modal quietly notes, under the field, when another
   page uses the same title or description, and when no social image is set.
   Nothing blocks saving.
@@ -88,13 +94,14 @@ one feature at a time.
 
 ## Settings
 
-**Yeast SEO** in the admin menu has three tabs:
+**Yeast SEO** in the admin menu has four tabs:
 
 - **General**: title separator and templates, automatic description,
   default social image, `twitter:site` handle, XML sitemaps on/off,
   per-post-type sitemap inclusion and sitemap images.
 - **Schema**: schema on/off, automatic structured data, and the
   Organization JSON-LD with its display rules.
+- **robots.txt**: the editor above.
 - **Import / Export**: see above.
 
 Turning schema off stops schema output and hides the schema field from the

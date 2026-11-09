@@ -47,6 +47,11 @@ class SitemapTest extends TestCase {
 		$this->assertSame( "User-agent: *\nDisallow: /\n", lcp_yeast_seo_robots_txt( "User-agent: *\nDisallow: /\n", '0' ) );
 	}
 
+	public function test_robots_txt_is_left_alone_when_the_site_is_hidden_as_a_boolean() {
+		$this->assertSame( "User-agent: *\n", lcp_yeast_seo_robots_txt( "User-agent: *\n", false ) );
+		$this->assertStringContainsString( 'Sitemap:', lcp_yeast_seo_robots_txt( "User-agent: *\n", true ) );
+	}
+
 	public function test_robots_txt_does_not_repeat_the_line() {
 		$once = lcp_yeast_seo_robots_txt( "User-agent: *\n", '1' );
 

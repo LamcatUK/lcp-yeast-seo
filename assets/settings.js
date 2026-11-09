@@ -14,6 +14,18 @@
 		} );
 	}
 
+	var robots = document.querySelector( '[data-robots-editor]' );
+	if ( robots ) {
+		document.querySelectorAll( '[data-robots-copy], [data-robots-default]' ).forEach( function ( button ) {
+			button.addEventListener( 'click', function () {
+				var text = button.hasAttribute( 'data-robots-copy' ) ? button.getAttribute( 'data-robots-copy' ) : button.getAttribute( 'data-robots-default' );
+				if ( robots.value.trim() === '' || robots.value.trim() === text.trim() || window.confirm( 'Replace the rules in the editor?' ) ) {
+					robots.value = text;
+				}
+			} );
+		} );
+	}
+
 	var modeBox = document.querySelector( '[data-org-mode]' );
 	if ( modeBox ) {
 		var rowOf = function ( el ) { return el.closest( 'tr' ); };

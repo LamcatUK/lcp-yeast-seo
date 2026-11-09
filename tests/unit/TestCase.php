@@ -28,6 +28,12 @@ abstract class TestCase extends PHPUnitTestCase {
 				'wp_parse_url'       => static function ( $url, $component = -1 ) {
 					return parse_url( $url, $component );
 				},
+				'wp_unslash'         => static function ( $value ) {
+					return $value;
+				},
+				'site_url'           => static function ( $path = '' ) {
+					return 'http://example.test' . $path;
+				},
 				'home_url'           => static function ( $path = '' ) {
 					return 'http://example.test' . $path;
 				},
@@ -37,7 +43,7 @@ abstract class TestCase extends PHPUnitTestCase {
 			)
 		);
 
-		foreach ( array( 'settings', 'post-meta', 'templates', 'sitemaps', 'schema', 'auto-schema', 'import-export', 'editor-checks' ) as $file ) {
+		foreach ( array( 'settings', 'post-meta', 'templates', 'sitemaps', 'schema', 'auto-schema', 'import-export', 'editor-checks', 'robots' ) as $file ) {
 			require_once LCP_YEAST_SEO_PATH . 'inc/' . $file . '.php';
 		}
 	}
