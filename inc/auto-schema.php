@@ -22,15 +22,67 @@ function lcp_yeast_seo_auto_schema_enabled() {
 }
 
 /**
+ * The kinds of node the plugin can generate, with the label shown in settings.
+ *
+ * @return string[] Kind => label.
+ */
+function lcp_yeast_seo_auto_schema_kinds() {
+	return array(
+		'website'    => 'WebSite',
+		'webpage'    => 'WebPage (and CollectionPage for the posts page)',
+		'article'    => 'Article / BlogPosting for posts',
+		'breadcrumb' => 'BreadcrumbList',
+		'itemlist'   => 'List of posts on the posts page',
+	);
+}
+
+/**
+ * Kinds switched off in settings. Everything is on until switched off.
+ *
+ * @return string[]
+ */
+function lcp_yeast_seo_auto_schema_disabled_kinds() {
+	$saved    = lcp_yeast_seo_get_setting( 'auto_schema_kinds', array() );
+	$disabled = array();
+
+	foreach ( array_keys( lcp_yeast_seo_auto_schema_kinds() ) as $kind ) {
+		if ( is_array( $saved ) && isset( $saved[ $kind ] ) && empty( $saved[ $kind ] ) ) {
+			$disabled[] = $kind;
+		}
+	}
+
+	return $disabled;
+}
+
+/**
+ * Sanitizes the per-kind switches.
+ *
+ * @param mixed $input Submitted values, kind => '1' or '0'.
+ * @return string[]
+ */
+function lcp_yeast_seo_sanitize_auto_schema_kinds( $input ) {
+	$input = is_array( $input ) ? $input : array();
+	$out   = array();
+
+	foreach ( array_keys( lcp_yeast_seo_auto_schema_kinds() ) as $kind ) {
+		$out[ $kind ] = empty( $input[ $kind ] ) ? '0' : '1';
+	}
+
+	return $out;
+}
+
+/**
  * Schema.org types that stand in for one another: a page that declares any
- * type in a group already has that kind of node.
+ * type in a group already has that kind of node. FAQPage is deliberately not
+ * a WebPage here: a FAQ block adds to a page's WebPage node, it doesn't
+ * replace it.
  *
  * @return array[] Group name => types.
  */
 function lcp_yeast_seo_auto_schema_type_groups() {
 	return array(
 		'website'    => array( 'WebSite' ),
-		'webpage'    => array( 'WebPage', 'CollectionPage', 'AboutPage', 'ContactPage', 'FAQPage', 'ProfilePage', 'ItemPage', 'QAPage', 'CheckoutPage', 'SearchResultsPage' ),
+		'webpage'    => array( 'WebPage', 'CollectionPage', 'AboutPage', 'ContactPage', 'ProfilePage', 'ItemPage', 'CheckoutPage', 'SearchResultsPage' ),
 		'article'    => array( 'Article', 'BlogPosting', 'NewsArticle', 'TechArticle', 'ScholarlyArticle', 'Report' ),
 		'breadcrumb' => array( 'BreadcrumbList' ),
 	);
@@ -40,7 +92,8 @@ function lcp_yeast_seo_auto_schema_type_groups() {
  * Builds the automatic graph from plain data.
  *
  * Context keys: home_url, site_name, tagline, language, org_id, is_front,
- * declared_types (types the page's own schema already declares), and page
+ * declared_types (types the page's own schema already declares),
+ * disabled_kinds (kinds switched off in settings), and page
  * (null, or url, name, description, kind, article_type, published, modified,
  * author {name, url}, image, breadcrumbs [[name, url], ...], items
  * [[name, url], ...] and items_start, for a listing page).
@@ -50,8 +103,9 @@ function lcp_yeast_seo_auto_schema_type_groups() {
  */
 function lcp_yeast_seo_build_auto_graph( array $ctx ) {
 	$declared = array_map( 'strval', (array) ( $ctx['declared_types'] ?? array() ) );
-	$has      = static function ( $group ) use ( $declared ) {
-		return (bool) array_intersect( lcp_yeast_seo_auto_schema_type_groups()[ $group ], $declared );
+	$disabled = (array) ( $ctx['disabled_kinds'] ?? array() );
+	$has      = static function ( $group ) use ( $declared, $disabled ) {
+		return in_array( $group, $disabled, true ) || array_intersect( lcp_yeast_seo_auto_schema_type_groups()[ $group ], $declared );
 	};
 
 	$home       = trailingslashit( $ctx['home_url'] );
@@ -129,7 +183,7 @@ function lcp_yeast_seo_build_auto_graph( array $ctx ) {
 				$webpage['about'] = $org_ref;
 			}
 
-			$list = lcp_yeast_seo_build_item_list( $url . '#postlist', (array) ( $page['items'] ?? array() ), (int) ( $page['items_start'] ?? 0 ) );
+			$list = in_array( 'itemlist', $disabled, true ) ? null : lcp_yeast_seo_build_item_list( $url . '#postlist', (array) ( $page['items'] ?? array() ), (int) ( $page['items_start'] ?? 0 ) );
 
 			if ( $list ) {
 				$webpage['mainEntity'] = $list;
@@ -164,7 +218,10 @@ function lcp_yeast_seo_build_auto_graph( array $ctx ) {
 		}
 
 		if ( ! empty( $page['author']['name'] ) ) {
-			$article['author'] = array( '@type' => 'Person', 'name' => $page['author']['name'] );
+			$article['author'] = array(
+				'@type' => $page['author']['type'] ?? 'Person',
+				'name'  => $page['author']['name'],
+			);
 
 			if ( ! empty( $page['author']['url'] ) ) {
 				$article['author']['url'] = $page['author']['url'];
@@ -343,6 +400,40 @@ function lcp_yeast_seo_breadcrumb_trail( $post_id ) {
 }
 
 /**
+ * Whether articles name the organisation, rather than the WordPress user, as
+ * their author.
+ *
+ * @return bool
+ */
+function lcp_yeast_seo_article_author_is_organization() {
+	return 'organization' === lcp_yeast_seo_get_setting( 'article_author', 'person' );
+}
+
+/**
+ * The author to credit on an article: the post's WordPress user, or the
+ * organisation (the site name and URL) for sites that publish under one name.
+ *
+ * @param int   $author_id Post author user ID.
+ * @param array $ctx       Context so far (site_name, home_url).
+ * @return array|null name, url and type, or null for no author.
+ */
+function lcp_yeast_seo_article_author( $author_id, array $ctx ) {
+	if ( lcp_yeast_seo_article_author_is_organization() ) {
+		return array(
+			'type' => 'Organization',
+			'name' => $ctx['site_name'],
+			'url'  => $ctx['home_url'],
+		);
+	}
+
+	return $author_id ? array(
+		'type' => 'Person',
+		'name' => get_the_author_meta( 'display_name', $author_id ),
+		'url'  => get_author_posts_url( $author_id ),
+	) : null;
+}
+
+/**
  * Gathers the context for the current request, or null when it isn't a page
  * this module describes.
  *
@@ -371,12 +462,13 @@ function lcp_yeast_seo_auto_schema_context() {
 		'org_id'         => $org_id,
 		'is_front'       => $is_front,
 		'declared_types' => lcp_yeast_seo_declared_types(),
+		'disabled_kinds' => lcp_yeast_seo_auto_schema_disabled_kinds(),
 		'page'           => null,
 	);
 
 	if ( $post_id ) {
 		$post          = get_post( $post_id );
-		$article_types = (array) apply_filters( 'lcp_yeast_seo_auto_schema_article_types', array( 'post' => 'Article' ) );
+		$article_types = (array) apply_filters( 'lcp_yeast_seo_auto_schema_article_types', array( 'post' => 'BlogPosting' ) );
 		$is_index      = is_home();
 		$author_id     = $post ? (int) $post->post_author : 0;
 
@@ -390,10 +482,7 @@ function lcp_yeast_seo_auto_schema_context() {
 			'article_type' => $is_index || $is_front ? '' : (string) ( $article_types[ get_post_type( $post_id ) ] ?? '' ),
 			'published'    => $is_front ? '' : get_post_time( 'c', true, $post_id ),
 			'modified'     => $is_front ? '' : get_post_modified_time( 'c', true, $post_id ),
-			'author'       => $author_id ? array(
-				'name' => get_the_author_meta( 'display_name', $author_id ),
-				'url'  => get_author_posts_url( $author_id ),
-			) : null,
+			'author'       => lcp_yeast_seo_article_author( $author_id, $ctx ),
 			'image'        => lcp_yeast_seo_get_post_image( $post_id ),
 			'breadcrumbs'  => $is_front ? array() : lcp_yeast_seo_breadcrumb_trail( $post_id ),
 			'items'        => $is_index ? lcp_yeast_seo_listing_items() : array(),
@@ -415,22 +504,48 @@ function lcp_yeast_seo_auto_schema_context() {
 }
 
 /**
- * Outputs the automatic graph in wp_head, before the Organization and the
- * page's own schema field.
+ * Schema.org types present in a finished page: JSON-LD entities (top level or
+ * in an @graph) and microdata itemtypes, from any source.
  *
- * @return void
+ * @param string $html Page HTML.
+ * @return string[]
  */
-function lcp_yeast_seo_render_auto_schema() {
-	if ( is_admin() || lcp_yeast_seo_yoast_active() || ! lcp_yeast_seo_schema_enabled() || ! lcp_yeast_seo_auto_schema_enabled() ) {
-		return;
+function lcp_yeast_seo_detect_schema_types( $html ) {
+	$types = array();
+
+	if ( preg_match_all( '#<script\b[^>]*\btype\s*=\s*["\']application/ld\+json["\'][^>]*>(.*?)</script>#is', (string) $html, $scripts ) ) {
+		foreach ( $scripts[1] as $json ) {
+			$data = json_decode( trim( $json ), true );
+
+			if ( ! is_array( $data ) ) {
+				continue;
+			}
+
+			$entities = isset( $data['@graph'] ) && is_array( $data['@graph'] ) ? $data['@graph'] : ( isset( $data['@type'] ) ? array( $data ) : $data );
+
+			foreach ( $entities as $entity ) {
+				if ( is_array( $entity ) && ! empty( $entity['@type'] ) ) {
+					$types = array_merge( $types, array_map( 'strval', (array) $entity['@type'] ) );
+				}
+			}
+		}
 	}
 
-	$ctx = lcp_yeast_seo_auto_schema_context();
-
-	if ( ! $ctx ) {
-		return;
+	if ( preg_match_all( '#\bitemtype\s*=\s*["\']https?://schema\.org/([A-Za-z]+)["\']#i', (string) $html, $microdata ) ) {
+		$types = array_merge( $types, $microdata[1] );
 	}
 
+	return array_values( array_unique( $types ) );
+}
+
+/**
+ * Builds the automatic graph's <script> tag for a context, or '' when there is
+ * nothing to output.
+ *
+ * @param array $ctx Context from lcp_yeast_seo_auto_schema_context(), with declared_types.
+ * @return string
+ */
+function lcp_yeast_seo_auto_schema_script( array $ctx ) {
 	/**
 	 * Filters the automatic schema nodes before they are output.
 	 *
@@ -440,7 +555,7 @@ function lcp_yeast_seo_render_auto_schema() {
 	$nodes = (array) apply_filters( 'lcp_yeast_seo_auto_schema_nodes', lcp_yeast_seo_build_auto_graph( $ctx ), $ctx );
 
 	if ( empty( $nodes ) ) {
-		return;
+		return '';
 	}
 
 	$json = wp_json_encode(
@@ -451,10 +566,115 @@ function lcp_yeast_seo_render_auto_schema() {
 		JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG
 	);
 
-	if ( false === $json ) {
+	return false === $json ? '' : '<script type="application/ld+json">' . $json . '</script>' . "\n";
+}
+
+/**
+ * Inserts the automatic graph into a finished page, just before </head>,
+ * leaving out every type the page already carries from any source (the page's
+ * own schema field, a theme block, another plugin). Returns the page untouched
+ * on any problem, so a failure here can never break a page.
+ *
+ * @param string $html Page HTML.
+ * @param array  $ctx  Context from lcp_yeast_seo_auto_schema_context().
+ * @return string
+ */
+function lcp_yeast_seo_inject_auto_schema( $html, array $ctx ) {
+	try {
+		$position = stripos( $html, '</head>' );
+
+		if ( false === $position ) {
+			return $html;
+		}
+
+		$ctx['declared_types'] = array_values( array_unique( array_merge( (array) $ctx['declared_types'], lcp_yeast_seo_detect_schema_types( $html ) ) ) );
+		$script                = lcp_yeast_seo_auto_schema_script( $ctx );
+
+		return '' === $script ? $html : substr_replace( $html, $script, $position, 0 );
+	} catch ( \Throwable $e ) {
+		return $html;
+	}
+}
+
+/**
+ * Whether the page output is being scanned (set once the buffer starts).
+ *
+ * @param bool|null $set Pass true when the buffer starts; omit to read.
+ * @return bool
+ */
+function lcp_yeast_seo_auto_schema_buffering( $set = null ) {
+	static $buffering = false;
+
+	if ( null !== $set ) {
+		$buffering = (bool) $set;
+	}
+
+	return $buffering;
+}
+
+/**
+ * Whether automatic schema applies to this request at all.
+ *
+ * @return bool
+ */
+function lcp_yeast_seo_auto_schema_active() {
+	return ! is_admin()
+		&& ! lcp_yeast_seo_yoast_active()
+		&& lcp_yeast_seo_schema_enabled()
+		&& lcp_yeast_seo_auto_schema_enabled();
+}
+
+/**
+ * Starts buffering the page so existing schema can be detected before the
+ * automatic graph is added. Theme blocks print their schema while the body
+ * renders, after wp_head has run, so the head alone can't tell.
+ *
+ * Return false from `lcp_yeast_seo_auto_schema_scan_output` to skip the scan
+ * and print the graph in wp_head regardless of what else is on the page.
+ *
+ * @return void
+ */
+function lcp_yeast_seo_start_auto_schema_buffer() {
+	if ( ! lcp_yeast_seo_auto_schema_active() || is_feed() || is_robots() || is_embed() || get_query_var( 'lcp_yeast_seo_sitemap' ) ) {
 		return;
 	}
 
-	echo '<script type="application/ld+json">' . $json . '</script>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+	if ( ! apply_filters( 'lcp_yeast_seo_auto_schema_scan_output', true ) ) {
+		return;
+	}
+
+	$ctx = lcp_yeast_seo_auto_schema_context();
+
+	if ( ! $ctx ) {
+		return;
+	}
+
+	lcp_yeast_seo_auto_schema_buffering( true );
+
+	ob_start(
+		static function ( $html ) use ( $ctx ) {
+			return lcp_yeast_seo_inject_auto_schema( $html, $ctx );
+		}
+	);
+}
+add_action( 'template_redirect', 'lcp_yeast_seo_start_auto_schema_buffer', 20 );
+
+/**
+ * Prints the automatic graph in wp_head when the page isn't being scanned
+ * (the scan filter is off). Types the page's own schema field declares are
+ * still skipped; types a theme prints later are not detectable here.
+ *
+ * @return void
+ */
+function lcp_yeast_seo_render_auto_schema() {
+	if ( lcp_yeast_seo_auto_schema_buffering() || ! lcp_yeast_seo_auto_schema_active() ) {
+		return;
+	}
+
+	$ctx = lcp_yeast_seo_auto_schema_context();
+
+	if ( $ctx ) {
+		echo lcp_yeast_seo_auto_schema_script( $ctx ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+	}
 }
 add_action( 'wp_head', 'lcp_yeast_seo_render_auto_schema', 18 );

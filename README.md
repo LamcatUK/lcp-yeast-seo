@@ -56,9 +56,14 @@ one feature at a time.
 - **Automatic structured data** (when Yoast is not active): a `@graph` of
   `WebSite`, `WebPage` (or `CollectionPage` for the posts page), `Article`
   for posts, the lead image and a `BreadcrumbList`. A type is skipped where
-  the page's own schema field already declares it. Switch off under
+  the page's own schema field, or anything else on the page (a theme's
+  breadcrumbs block, another plugin), already provides it: the finished page
+  is scanned for JSON-LD and microdata before the graph is added to the
+  `<head>`. Switch off under
   **Yeast SEO → Schema**. Filter: `lcp_yeast_seo_auto_schema_nodes`;
-  `lcp_yeast_seo_auto_schema_article_types` maps post types to Article types.
+  `lcp_yeast_seo_auto_schema_article_types` maps post types to Article types
+  (posts are `BlogPosting` by default). Posts can be credited to the post's
+  author or to the site as an Organization (Schema tab).
 - **Import / Export tab**: CSV or XLSX import of titles and descriptions by
   URL (with dry run), CSV export from Yeast, Yoast, Rank Math or SEOPress
   with their template variables resolved, and direct migration from those

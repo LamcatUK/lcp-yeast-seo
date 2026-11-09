@@ -1,6 +1,8 @@
 <?php
 namespace Lcp\YeastSeo\Tests;
 
+use Brain\Monkey\Functions;
+
 class AutoSchemaTest extends TestCase {
 
 	private function context( array $override = array() ) {
@@ -98,13 +100,20 @@ class AutoSchemaTest extends TestCase {
 	}
 
 	public function test_types_the_page_already_declares_are_not_generated() {
-		$nodes = lcp_yeast_seo_build_auto_graph( $this->context( array( 'declared_types' => array( 'BlogPosting', 'FAQPage', 'WebSite', 'BreadcrumbList' ) ) ) );
+		$nodes = lcp_yeast_seo_build_auto_graph( $this->context( array( 'declared_types' => array( 'BlogPosting', 'ContactPage', 'WebSite', 'BreadcrumbList' ) ) ) );
 
 		$this->assertSame( array(), $this->types( $nodes ), 'nothing is left to generate, not even the orphaned image' );
 		$this->assertNull( $this->node( $nodes, 'WebSite' ) );
-		$this->assertNull( $this->node( $nodes, 'WebPage' ), 'FAQPage counts as a WebPage' );
+		$this->assertNull( $this->node( $nodes, 'WebPage' ), 'ContactPage counts as a WebPage' );
 		$this->assertNull( $this->node( $nodes, 'Article' ), 'BlogPosting counts as an Article' );
 		$this->assertNull( $this->node( $nodes, 'BreadcrumbList' ) );
+	}
+
+	public function test_a_faq_block_does_not_replace_the_webpage() {
+		$nodes = lcp_yeast_seo_build_auto_graph( $this->context( array( 'declared_types' => array( 'FAQPage' ) ) ) );
+
+		$this->assertNotNull( $this->node( $nodes, 'WebPage' ), 'FAQPage sits alongside the WebPage' );
+		$this->assertNotNull( $this->node( $nodes, 'Article' ) );
 	}
 
 	public function test_article_points_at_the_url_when_the_webpage_is_the_pages_own() {
@@ -209,6 +218,83 @@ class AutoSchemaTest extends TestCase {
 		$nodes = lcp_yeast_seo_build_auto_graph( $this->listing_context( array(), array( 'declared_types' => array( 'CollectionPage' ) ) ) );
 
 		$this->assertNull( $this->node( $nodes, 'CollectionPage' ) );
+	}
+
+	public function test_author_is_a_person_unless_told_otherwise() {
+		$article = $this->node( lcp_yeast_seo_build_auto_graph( $this->context() ), 'Article' );
+
+		$this->assertSame( 'Person', $article['author']['@type'] );
+		$this->assertSame( 'Sam', $article['author']['name'] );
+	}
+
+	public function test_author_can_be_the_organization() {
+		$ctx                       = $this->context();
+		$ctx['page']['author']     = array(
+			'type' => 'Organization',
+			'name' => 'Example',
+			'url'  => 'http://example.test/',
+		);
+
+		$author = $this->node( lcp_yeast_seo_build_auto_graph( $ctx ), 'Article' )['author'];
+
+		$this->assertSame( 'Organization', $author['@type'] );
+		$this->assertSame( 'Example', $author['name'] );
+		$this->assertSame( 'http://example.test/', $author['url'] );
+	}
+
+	public function test_no_author_means_no_author_property() {
+		$ctx                   = $this->context();
+		$ctx['page']['author'] = null;
+
+		$this->assertArrayNotHasKey( 'author', $this->node( lcp_yeast_seo_build_auto_graph( $ctx ), 'Article' ) );
+	}
+
+	public function test_a_switched_off_kind_is_never_generated() {
+		$nodes = lcp_yeast_seo_build_auto_graph( $this->context( array( 'disabled_kinds' => array( 'breadcrumb', 'website' ) ) ) );
+
+		$this->assertNull( $this->node( $nodes, 'BreadcrumbList' ) );
+		$this->assertNull( $this->node( $nodes, 'WebSite' ) );
+		$this->assertNotNull( $this->node( $nodes, 'WebPage' ) );
+		$this->assertArrayNotHasKey( 'breadcrumb', $this->node( $nodes, 'WebPage' ), 'the WebPage must not point at a breadcrumb that is not there' );
+	}
+
+	public function test_switching_off_the_article_leaves_the_page() {
+		$nodes = lcp_yeast_seo_build_auto_graph( $this->context( array( 'disabled_kinds' => array( 'article' ) ) ) );
+
+		$this->assertNull( $this->node( $nodes, 'Article' ) );
+		$this->assertNotNull( $this->node( $nodes, 'WebPage' ) );
+	}
+
+	public function test_switching_off_the_page_leaves_the_article_pointing_at_the_url() {
+		$nodes = lcp_yeast_seo_build_auto_graph( $this->context( array( 'disabled_kinds' => array( 'webpage' ) ) ) );
+
+		$this->assertNull( $this->node( $nodes, 'WebPage' ) );
+		$this->assertSame( 'http://example.test/guides/a-post/', $this->node( $nodes, 'Article' )['mainEntityOfPage']['@id'] );
+	}
+
+	public function test_switching_off_the_post_list_keeps_the_collection_page() {
+		$nodes   = lcp_yeast_seo_build_auto_graph( $this->listing_context( array(), array( 'disabled_kinds' => array( 'itemlist' ) ) ) );
+		$webpage = $this->node( $nodes, 'CollectionPage' );
+
+		$this->assertNotNull( $webpage );
+		$this->assertArrayNotHasKey( 'mainEntity', $webpage );
+	}
+
+	public function test_everything_is_on_until_switched_off() {
+		Functions\when( 'get_option' )->justReturn( array() );
+		$this->assertSame( array(), lcp_yeast_seo_auto_schema_disabled_kinds() );
+
+		Functions\when( 'get_option' )->justReturn( array( 'auto_schema_kinds' => array( 'breadcrumb' => '0', 'website' => '1' ) ) );
+		$this->assertSame( array( 'breadcrumb' ), lcp_yeast_seo_auto_schema_disabled_kinds() );
+	}
+
+	public function test_kind_switches_are_sanitized_to_zero_or_one() {
+		$out = lcp_yeast_seo_sanitize_auto_schema_kinds( array( 'website' => '1', 'article' => 'yes', 'bogus' => '1' ) );
+
+		$this->assertSame( '1', $out['website'] );
+		$this->assertSame( '1', $out['article'] );
+		$this->assertSame( '0', $out['breadcrumb'], 'a missing box means switched off' );
+		$this->assertArrayNotHasKey( 'bogus', $out );
 	}
 
 	public function test_output_encodes_as_valid_json() {

@@ -13,6 +13,9 @@ abstract class TestCase extends PHPUnitTestCase {
 
 		Functions\stubs(
 			array(
+				'wp_json_encode'     => static function ( $data, $flags = 0 ) {
+					return json_encode( $data, $flags );
+				},
 				'wp_strip_all_tags'  => static function ( $text ) {
 					return trim( strip_tags( (string) $text ) );
 				},

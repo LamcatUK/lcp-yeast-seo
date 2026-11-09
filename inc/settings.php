@@ -68,6 +68,8 @@ function lcp_yeast_seo_sanitize_settings( $input ) {
 		'sitemap_post_types'        => lcp_yeast_seo_sanitize_sitemap_post_types( $input['sitemap_post_types'] ?? array() ),
 		'sitemap_images'            => empty( $input['sitemap_images'] ) ? '0' : '1',
 		'auto_schema'               => empty( $input['auto_schema'] ) ? '0' : '1',
+		'auto_schema_kinds'         => lcp_yeast_seo_sanitize_auto_schema_kinds( $input['auto_schema_kinds'] ?? array() ),
+		'article_author'            => isset( $input['article_author'] ) && 'organization' === $input['article_author'] ? 'organization' : 'person',
 		'auto_description'          => empty( $input['auto_description'] ) ? '0' : '1',
 		'title_sep'                 => isset( $input['title_sep'] ) ? lcp_yeast_seo_sanitize_title_sep( wp_unslash( $input['title_sep'] ) ) : '|',
 		'title_templates'           => lcp_yeast_seo_sanitize_title_templates( $input['title_templates'] ?? array() ),
@@ -333,6 +335,22 @@ function lcp_yeast_seo_register_settings_page() {
 			'lcp-yeast-seo-schema',
 			'lcp_yeast_seo_schema'
 		);
+
+		add_settings_field(
+			'auto_schema_kinds',
+			'Generate',
+			'lcp_yeast_seo_render_auto_schema_kinds_field',
+			'lcp-yeast-seo-schema',
+			'lcp_yeast_seo_schema'
+		);
+
+		add_settings_field(
+			'article_author',
+			'Article author',
+			'lcp_yeast_seo_render_article_author_field',
+			'lcp-yeast-seo-schema',
+			'lcp_yeast_seo_schema'
+		);
 	}
 
 	add_settings_field( 'title_sep', 'Title separator', 'lcp_yeast_seo_render_title_sep_field', 'lcp-yeast-seo', 'lcp_yeast_seo_titles' );
@@ -552,6 +570,45 @@ function lcp_yeast_seo_render_auto_schema_field() {
 		Generate WebSite, WebPage, Article and BreadcrumbList data for pages and posts.
 	</label>
 	<p class="description">A type is only generated where the page's own schema field doesn't already declare it, so hand-written schema always wins.</p>
+	<?php
+}
+
+/**
+ * Render the per-kind switches for automatic structured data.
+ *
+ * @return void
+ */
+function lcp_yeast_seo_render_auto_schema_kinds_field() {
+	$disabled = lcp_yeast_seo_auto_schema_disabled_kinds();
+
+	foreach ( lcp_yeast_seo_auto_schema_kinds() as $kind => $label ) {
+		$name = LCP_YEAST_SEO_SETTINGS_OPTION . '[auto_schema_kinds][' . $kind . ']';
+		?>
+		<label style="display:block;margin-bottom:6px;">
+			<input type="hidden" name="<?php echo esc_attr( $name ); ?>" value="0">
+			<input type="checkbox" name="<?php echo esc_attr( $name ); ?>" value="1" <?php checked( ! in_array( $kind, $disabled, true ) ); ?>>
+			<?php echo esc_html( $label ); ?>
+		</label>
+		<?php
+	}
+	?>
+	<p class="description">Each is added only where the page doesn't already have it, whether from the page's own schema field or something your theme prints (such as a breadcrumbs block), so leaving them all on is safe. Untick one to stop the plugin generating it at all.</p>
+	<?php
+}
+
+/**
+ * Render the article author select.
+ *
+ * @return void
+ */
+function lcp_yeast_seo_render_article_author_field() {
+	$current = lcp_yeast_seo_article_author_is_organization() ? 'organization' : 'person';
+	?>
+	<select name="<?php echo esc_attr( LCP_YEAST_SEO_SETTINGS_OPTION ); ?>[article_author]">
+		<option value="person" <?php selected( $current, 'person' ); ?>>The post's author (a Person)</option>
+		<option value="organization" <?php selected( $current, 'organization' ); ?>>The site, as an Organization</option>
+	</select>
+	<p class="description">Who posts are credited to in their structured data. Choose the site if you publish under one name and don't want WordPress usernames shown.</p>
 	<?php
 }
 
