@@ -1,6 +1,8 @@
 <?php
 namespace Lcp\YeastSeo\Tests;
 
+use Brain\Monkey\Functions;
+
 class HealthTest extends TestCase {
 
 	private $host = 'example.test';
@@ -233,6 +235,8 @@ class HealthTest extends TestCase {
 
 		$this->assertNotSame( '', lcp_yeast_seo_health_hint( 'duplicate_breadcrumb' ) );
 		$this->assertNotSame( '', lcp_yeast_seo_health_hint( 'http_404' ) );
+		$this->assertNotSame( '', lcp_yeast_seo_health_hint( 'meta_duplicate_title' ) );
+		$this->assertNotSame( '', lcp_yeast_seo_health_hint( 'meta_duplicate_description' ) );
 		$this->assertSame( '', lcp_yeast_seo_health_hint( 'something_unknown' ) );
 	}
 
@@ -264,5 +268,169 @@ class HealthTest extends TestCase {
 
 		$this->assertSame( array( 'e_rare', 'w_common', 'w_once' ), array_column( $problems, 'message' ) );
 		$this->assertSame( array( 1, 3, 1 ), array_column( $problems, 'pages' ) );
+	}
+
+	private function head( array $over = array() ) {
+		$parts = array_merge(
+			array(
+				'title'     => '<title>A good page title for search</title>',
+				'desc'      => '<meta name="description" content="' . str_repeat( 'A useful summary of the page. ', 3 ) . '">',
+				'canonical' => '<link rel="canonical" href="http://example.test/a/">',
+				'og_title'  => '<meta property="og:title" content="A">',
+				'og_image'  => '<meta property="og:image" content="http://example.test/i.jpg">',
+				'robots'    => '',
+				'h1'        => '<h1>A</h1>',
+			),
+			$over
+		);
+
+		return '<html><head>' . implode( '', array_diff_key( $parts, array( 'h1' => 1 ) ) ) . '</head><body>' . $parts['h1'] . '</body></html>';
+	}
+
+	private function meta_codes( $html, $url = 'http://example.test/a/' ) {
+		return array_column( lcp_yeast_seo_health_analyze_meta( $html, $url )['issues'], 'code' );
+	}
+
+	public function test_a_page_with_good_meta_has_no_meta_issues() {
+		$this->assertSame( array(), $this->meta_codes( $this->head() ) );
+	}
+
+	public function test_a_missing_title_and_description_are_errors() {
+		$result = lcp_yeast_seo_health_analyze_meta( $this->head( array( 'title' => '', 'desc' => '' ) ), 'http://example.test/a/' );
+		$levels = array_column( $result['issues'], 'level', 'code' );
+
+		$this->assertSame( 'error', $levels['meta_no_title'] );
+		$this->assertSame( 'error', $levels['meta_no_description'] );
+	}
+
+	public function test_an_empty_description_counts_as_missing() {
+		$this->assertContains( 'meta_no_description', $this->meta_codes( $this->head( array( 'desc' => '<meta name="description" content="  ">' ) ) ) );
+	}
+
+	public function test_title_and_description_length_are_warnings() {
+		$long  = $this->meta_codes( $this->head( array( 'title' => '<title>' . str_repeat( 'a', 61 ) . '</title>', 'desc' => '<meta name="description" content="' . str_repeat( 'a', 161 ) . '">' ) ) );
+		$short = $this->meta_codes( $this->head( array( 'title' => '<title>Hi</title>', 'desc' => '<meta name="description" content="Short">' ) ) );
+
+		$this->assertContains( 'meta_title_long', $long );
+		$this->assertContains( 'meta_description_long', $long );
+		$this->assertContains( 'meta_title_short', $short );
+		$this->assertContains( 'meta_description_short', $short );
+		$this->assertSame( array(), array_diff( array_merge( $long, $short ), array( 'meta_title_long', 'meta_description_long', 'meta_title_short', 'meta_description_short' ) ) );
+	}
+
+	public function test_lengths_at_the_limits_are_fine() {
+		$html = $this->head( array( 'title' => '<title>' . str_repeat( 'a', 60 ) . '</title>', 'desc' => '<meta name="description" content="' . str_repeat( 'a', 160 ) . '">' ) );
+
+		$this->assertSame( array(), $this->meta_codes( $html ) );
+	}
+
+	public function test_title_entities_and_attribute_order_are_read() {
+		$html = $this->head( array( 'title' => '<title>Fish &amp; chips: the very best in town</title>', 'desc' => '<meta content="' . str_repeat( 'Nice summary. ', 6 ) . '" name="description">' ) );
+		$meta = lcp_yeast_seo_health_analyze_meta( $html, 'http://example.test/a/' );
+
+		$this->assertSame( 'Fish & chips: the very best in town', $meta['facts']['title'] );
+		$this->assertNotSame( '', $meta['facts']['description'] );
+		$this->assertSame( array(), array_column( $meta['issues'], 'code' ) );
+	}
+
+	public function test_a_noindex_page_in_the_sitemap_is_noted_and_skips_the_other_checks() {
+		$result = lcp_yeast_seo_health_analyze_meta( $this->head( array( 'title' => '', 'desc' => '', 'robots' => '<meta name="robots" content="noindex, follow">' ) ), 'http://example.test/a/' );
+
+		$this->assertSame( array( 'meta_noindex' ), array_column( $result['issues'], 'code' ) );
+		$this->assertFalse( $result['facts']['indexable'] );
+	}
+
+	public function test_a_site_wide_noindex_is_ignored_and_the_checks_still_run() {
+		$html   = $this->head( array( 'desc' => '', 'robots' => '<meta name="robots" content="noindex, nofollow">' ) );
+		$result = lcp_yeast_seo_health_analyze_meta( $html, 'http://example.test/a/', true );
+
+		$this->assertSame( array( 'meta_no_description' ), array_column( $result['issues'], 'code' ) );
+		$this->assertTrue( $result['facts']['indexable'] );
+	}
+
+	public function test_canonical_must_exist_and_match_the_page() {
+		$this->assertContains( 'meta_no_canonical', $this->meta_codes( $this->head( array( 'canonical' => '' ) ) ) );
+		$this->assertContains( 'meta_canonical_other', $this->meta_codes( $this->head( array( 'canonical' => '<link rel="canonical" href="http://example.test/b/">' ) ) ) );
+		$this->assertContains( 'meta_canonical_other', $this->meta_codes( $this->head( array( 'canonical' => '<link rel="canonical" href="http://example.test/a/?lcp_health=1">' ) ) ) );
+		$this->assertNotContains( 'meta_canonical_other', $this->meta_codes( $this->head( array( 'canonical' => '<link rel="canonical" href="HTTP://EXAMPLE.TEST/a/#top">' ) ) ) );
+		$this->assertContains( 'meta_canonical_other', $this->meta_codes( $this->head( array( 'canonical' => '<link rel="canonical" href="http://example.test/a">' ) ) ) );
+	}
+
+	public function test_exactly_one_h1_is_expected() {
+		$this->assertContains( 'meta_no_h1', $this->meta_codes( $this->head( array( 'h1' => '<h2>A</h2>' ) ) ) );
+		$this->assertContains( 'meta_multiple_h1', $this->meta_codes( $this->head( array( 'h1' => '<h1>A</h1><h1 class="x">B</h1>' ) ) ) );
+	}
+
+	public function test_social_tags_are_checked() {
+		$codes = $this->meta_codes( $this->head( array( 'og_title' => '', 'og_image' => '<meta property="og:image" content="">' ) ) );
+
+		$this->assertContains( 'meta_no_og_title', $codes );
+		$this->assertContains( 'meta_no_og_image', $codes );
+	}
+
+	public function test_meta_issues_are_told_apart_from_schema_issues() {
+		$this->assertSame( 'meta', lcp_yeast_seo_health_area_of( 'meta_no_title' ) );
+		$this->assertSame( 'schema', lcp_yeast_seo_health_area_of( 'dangling_ref' ) );
+
+		$result = array(
+			'issues' => array(
+				array( 'level' => 'error', 'code' => 'meta_no_title', 'message' => '' ),
+				array( 'level' => 'warning', 'code' => 'article_no_image', 'message' => '' ),
+			),
+			'meta'   => array(),
+		);
+
+		$this->assertSame( 'error', lcp_yeast_seo_health_area_status( $result, 'meta' ) );
+		$this->assertSame( 'warning', lcp_yeast_seo_health_area_status( $result, 'schema' ) );
+		$this->assertSame( 'none', lcp_yeast_seo_health_area_status( null, 'schema' ) );
+		unset( $result['meta'] );
+		$this->assertSame( 'none', lcp_yeast_seo_health_area_status( $result, 'meta' ), 'results from before meta checks existed are not judged' );
+	}
+
+	public function test_pages_sharing_a_title_or_description_are_flagged_and_status_follows() {
+		Functions\when( 'get_the_title' )->alias( static function ( $id ) {
+			return "Page $id";
+		} );
+
+		$meta = static function ( $title, $desc, $indexable = true ) {
+			return array( 'title' => $title, 'description' => $desc, 'indexable' => $indexable );
+		};
+		$base = array( 'status' => 'ok', 'issues' => array() );
+
+		$results = array(
+			1 => $base + array( 'meta' => $meta( 'Same title', 'One' ) ),
+			2 => $base + array( 'meta' => $meta( 'same TITLE', 'Two' ) ),
+			3 => $base + array( 'meta' => $meta( 'Unique', 'Two' ) ),
+			4 => $base + array( 'meta' => $meta( 'Same title', 'Four', false ) ),
+			5 => $base,
+		);
+
+		$effective = lcp_yeast_seo_health_effective( array( 1, 2, 3, 4, 5, 6 ), $results );
+
+		$this->assertSame( array( 'meta_duplicate_title' ), array_column( $effective[1]['issues'], 'code' ) );
+		$this->assertSame( array( 'meta_duplicate_title', 'meta_duplicate_description' ), array_column( $effective[2]['issues'], 'code' ) );
+		$this->assertSame( array( 'meta_duplicate_description' ), array_column( $effective[3]['issues'], 'code' ) );
+		$this->assertSame( 'error', $effective[1]['status'] );
+		$this->assertSame( 'ok', $effective[4]['status'], 'a noindex page is not part of the comparison' );
+		$this->assertSame( 'ok', $effective[5]['status'] );
+		$this->assertArrayNotHasKey( 6, $effective, 'unchecked pages are left out' );
+		$this->assertStringContainsString( 'Page 2', $effective[1]['issues'][0]['message'] );
+	}
+
+	public function test_duplicates_are_listed_once_with_a_page_neutral_summary() {
+		Functions\when( 'get_the_title' )->justReturn( 'x' );
+
+		$issues  = array();
+		$results = array();
+
+		foreach ( array( 1, 2 ) as $id ) {
+			$results[ $id ] = array( 'status' => 'ok', 'issues' => $issues, 'meta' => array( 'title' => 'Same', 'description' => 'd' . $id, 'indexable' => true ) );
+		}
+
+		$problems = lcp_yeast_seo_health_common_problems( array( 1, 2 ), lcp_yeast_seo_health_effective( array( 1, 2 ), $results ) );
+
+		$this->assertSame( 1, count( $problems ) );
+		$this->assertSame( 2, $problems[0]['pages'] );
+		$this->assertSame( 'Pages share the same title.', $problems[0]['message'] );
 	}
 }

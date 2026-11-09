@@ -3,7 +3,7 @@ Tags: seo, schema, sitemap, meta description, open graph
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 0.11.0
+Stable tag: 0.12.0
 
 Per-post SEO controls for titles, descriptions, social tags, canonical URLs and schema, with XML sitemaps. Built to replace Yoast one feature at a time.
 
@@ -33,6 +33,11 @@ After every deploy, run the smoke test against the live site. It checks the site
     LCP_SMOKE_URL=https://example.com LCP_SMOKE_ARCHIVE=/guides/ composer test:smoke
 
 == Changelog ==
+
+= 0.12.0 =
+* New: the Health tab now checks each page's search listing as well as its schema. Per page it reports a missing or empty title or meta description (errors), titles over 60 or under 15 characters and descriptions over 160 or under 70 (warnings), a missing canonical link or one that points elsewhere, a missing or repeated H1, and missing `og:title` / `og:image`. The same title or description used on more than one page is an error. Pages marked noindex are only noted, since they aren't meant to appear in results.
+* Each page row shows separate Schema and Meta marks, tags every problem with its area, and shows the title and description found with their lengths. The jar counts a page as healthy only when both pass.
+* Pages scanned under 0.11.0 show Meta as "Not checked" until they are scanned again.
 
 = 0.11.0 =
 * New: Health tab. Scans every page in your sitemaps the way a visitor gets it (so schema printed by theme blocks is included) and reports pages with no structured data, invalid JSON-LD, a missing `@context` or `@type`, duplicate entities, `@id` references that point at nothing, and missing recommended properties on articles, breadcrumbs, FAQs and local businesses. Each problem comes with a plain-language fix, "Fix these first" ranks the problems that affect the most pages, and any page can be checked again on its own. A starter jar shows the share of healthy pages.

@@ -220,14 +220,14 @@ function lcp_yeast_seo_count_noun( $count, $singular, $plural = '' ) {
  */
 function lcp_yeast_seo_health_render_summary( $animate = false ) {
 	$ids     = lcp_yeast_seo_health_page_ids();
-	$results = lcp_yeast_seo_health_results();
+	$results = lcp_yeast_seo_health_effective( $ids, lcp_yeast_seo_health_results() );
 	$totals  = lcp_yeast_seo_health_totals( $ids, $results );
 	$percent = $totals['checked'] ? (int) round( 100 * $totals['ok'] / max( 1, $totals['total'] ) ) : 0;
 	$last    = $totals['checked'] ? max( array_column( array_intersect_key( $results, array_flip( $ids ) ), 'time' ) ) : 0;
 
 	if ( ! $totals['checked'] ) {
 		$headline = 'No scan yet';
-		$detail   = 'Scan the site to check every page in your sitemaps for missing or broken structured data.';
+		$detail   = 'Scan the site to check every page in your sitemaps for its title, description, canonical and structured data.';
 		$label    = 'The jar is empty: no pages have been checked yet';
 	} else {
 		$headline = $totals['ok'] === $totals['total'] ? 'Every page is healthy' : $totals['ok'] . ' of ' . $totals['total'] . ' pages are healthy';
@@ -271,13 +271,13 @@ function lcp_yeast_seo_health_render_summary( $animate = false ) {
  */
 function lcp_yeast_seo_health_render_list() {
 	$ids      = lcp_yeast_seo_health_page_ids();
-	$results  = lcp_yeast_seo_health_results();
+	$results  = lcp_yeast_seo_health_effective( $ids, lcp_yeast_seo_health_results() );
 	$problems = lcp_yeast_seo_health_common_problems( $ids, $results );
 
 	if ( $problems ) :
 		?>
 		<section class="lcp-ys-card">
-			<div class="lcp-ys-card__head"><h2>Fix these first</h2><div class="lcp-ys-card__intro"><p>The problems that affect the most pages, errors before warnings.</p></div></div>
+			<div class="lcp-ys-card__head"><h2>Fix these first</h2><div class="lcp-ys-card__intro"><p>The problems that affect the most pages, errors before warnings. Titles, descriptions and structured data are all checked.</p></div></div>
 			<ul class="lcp-ys-problems">
 				<?php foreach ( array_slice( $problems, 0, 8 ) as $problem ) : ?>
 					<li class="lcp-ys-problem lcp-ys-problem--<?php echo esc_attr( $problem['level'] ); ?>">
@@ -339,6 +339,12 @@ function lcp_yeast_seo_health_render_row( $post_id, $result ) {
 		<summary>
 			<span class="lcp-ys-chip lcp-ys-chip--<?php echo esc_attr( $chip[1] ); ?>"><?php echo esc_html( $chip[0] ); ?></span>
 			<span class="lcp-ys-row__title"><?php echo esc_html( wp_strip_all_tags( get_the_title( $post_id ) ) ); ?><span class="lcp-ys-row__type"><?php echo esc_html( $object ? $object->labels->singular_name : '' ); ?></span></span>
+			<span class="lcp-ys-areas">
+				<?php foreach ( array( 'schema' => 'Schema', 'meta' => 'Meta' ) as $area => $label ) : ?>
+					<?php $area_chip = lcp_yeast_seo_health_status_chip( lcp_yeast_seo_health_area_status( $result, $area ) ); ?>
+					<span class="lcp-ys-area lcp-ys-area--<?php echo esc_attr( $area_chip[1] ); ?>" title="<?php echo esc_attr( $label . ': ' . strtolower( $area_chip[0] ) ); ?>"><?php echo esc_html( $label ); ?></span>
+				<?php endforeach; ?>
+			</span>
 			<span class="lcp-ys-row__types">
 				<?php foreach ( array_slice( $types, 0, 4 ) as $type ) : ?>
 					<code><?php echo esc_html( $type ); ?></code>
@@ -363,6 +369,7 @@ function lcp_yeast_seo_health_render_row( $post_id, $result ) {
 				<ul class="lcp-ys-issues">
 					<?php foreach ( $issues as $issue ) : ?>
 						<li class="lcp-ys-issue lcp-ys-issue--<?php echo esc_attr( $issue['level'] ); ?>">
+							<span class="lcp-ys-issue__area"><?php echo esc_html( 'meta' === lcp_yeast_seo_health_area_of( $issue['code'] ) ? 'Meta' : 'Schema' ); ?></span>
 							<?php echo esc_html( $issue['message'] ); ?>
 							<?php if ( '' !== lcp_yeast_seo_health_hint( $issue['code'] ) ) : ?>
 								<span class="lcp-ys-hint"><?php echo esc_html( lcp_yeast_seo_health_hint( $issue['code'] ) ); ?></span>
@@ -374,6 +381,14 @@ function lcp_yeast_seo_health_render_row( $post_id, $result ) {
 				<p class="lcp-ys-row__note">No problems found. <?php echo esc_html( lcp_yeast_seo_count_noun( (int) $result['blocks'], 'JSON-LD block' ) ); ?> on the page.</p>
 			<?php else : ?>
 				<p class="lcp-ys-row__note">This page has not been checked yet.</p>
+			<?php endif; ?>
+			<?php if ( ! empty( $result['meta']['indexable'] ) ) : ?>
+				<dl class="lcp-ys-facts">
+					<dt>Title</dt>
+					<dd><?php echo '' !== $result['meta']['title'] ? esc_html( $result['meta']['title'] ) . ' <span>(' . (int) mb_strlen( $result['meta']['title'] ) . ')</span>' : '<em>none</em>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped above. ?></dd>
+					<dt>Description</dt>
+					<dd><?php echo '' !== $result['meta']['description'] ? esc_html( $result['meta']['description'] ) . ' <span>(' . (int) mb_strlen( $result['meta']['description'] ) . ')</span>' : '<em>none</em>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped above. ?></dd>
+				</dl>
 			<?php endif; ?>
 			<p class="lcp-ys-row__actions">
 				<button type="button" class="button button-small" data-recheck="<?php echo (int) $post_id; ?>">Check again</button>
@@ -395,6 +410,9 @@ function lcp_yeast_seo_health_render_row( $post_id, $result ) {
 function lcp_yeast_seo_health_render_tab() {
 	?>
 	<div data-health data-filter="all">
+		<?php if ( ! get_option( 'blog_public' ) ) : ?>
+			<p class="lcp-ys-notice">This site is set to discourage search engines (Settings, Reading), so every page carries a noindex tag. That is not counted as a problem here, and the pages are checked as if the site were public.</p>
+		<?php endif; ?>
 		<section class="lcp-ys-card lcp-ys-overview">
 			<div data-health-summary><?php lcp_yeast_seo_health_render_summary( true ); ?></div>
 			<div class="lcp-ys-scan">

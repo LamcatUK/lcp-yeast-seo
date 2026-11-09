@@ -11,6 +11,10 @@ defined( 'ABSPATH' ) || exit;
 
 define( 'LCP_YEAST_SEO_HEALTH_OPTION', 'lcp_yeast_seo_health' );
 define( 'LCP_YEAST_SEO_HEALTH_BATCH', 3 );
+define( 'LCP_YEAST_SEO_HEALTH_TITLE_MIN', 15 );
+define( 'LCP_YEAST_SEO_HEALTH_TITLE_MAX', 60 );
+define( 'LCP_YEAST_SEO_HEALTH_DESCRIPTION_MIN', 70 );
+define( 'LCP_YEAST_SEO_HEALTH_DESCRIPTION_MAX', 160 );
 
 /**
  * Splits a page's JSON-LD scripts into parsed blocks.
@@ -349,6 +353,291 @@ function lcp_yeast_seo_health_check_entity( array $entity, array $types ) {
 }
 
 /**
+ * Worst level among issues: error, then warning, else ok.
+ *
+ * @param array[] $issues Issues, each with a level.
+ * @return string ok, warning or error.
+ */
+function lcp_yeast_seo_health_status_of( array $issues ) {
+	$status = 'ok';
+
+	foreach ( $issues as $issue ) {
+		if ( 'error' === $issue['level'] ) {
+			return 'error';
+		}
+
+		$status = 'warning';
+	}
+
+	return $status;
+}
+
+/**
+ * Status of one area (schema or meta) in a result.
+ *
+ * @param array|null $result Result record.
+ * @param string     $area   schema or meta.
+ * @return string ok, warning, error or none when it hasn't been checked.
+ */
+function lcp_yeast_seo_health_area_status( $result, $area ) {
+	if ( ! $result || ( 'meta' === $area && ! isset( $result['meta'] ) ) ) {
+		return 'none';
+	}
+
+	$issues = array_filter(
+		$result['issues'] ?? array(),
+		static function ( $issue ) use ( $area ) {
+			return lcp_yeast_seo_health_area_of( $issue['code'] ) === $area;
+		}
+	);
+
+	return lcp_yeast_seo_health_status_of( $issues );
+}
+
+/**
+ * Which area an issue belongs to: meta (title, description and the like) or schema.
+ *
+ * @param string $code Issue code.
+ * @return string meta or schema.
+ */
+function lcp_yeast_seo_health_area_of( $code ) {
+	return 0 === strpos( (string) $code, 'meta_' ) ? 'meta' : 'schema';
+}
+
+/**
+ * Attributes of every tag of a kind in the head, lower-cased by name.
+ *
+ * @param string $head Head HTML.
+ * @param string $tag  Tag name, e.g. meta or link.
+ * @return array[] One attribute map per tag.
+ */
+function lcp_yeast_seo_health_head_tags( $head, $tag ) {
+	$found = array();
+
+	if ( ! preg_match_all( '/<' . $tag . '\b[^>]*>/i', (string) $head, $tags ) ) {
+		return $found;
+	}
+
+	foreach ( $tags[0] as $raw ) {
+		$attrs = array();
+
+		if ( preg_match_all( '/([a-zA-Z:_-]+)\s*=\s*(?:"([^"]*)"|\'([^\']*)\')/', $raw, $pairs, PREG_SET_ORDER ) ) {
+			foreach ( $pairs as $pair ) {
+				$attrs[ strtolower( $pair[1] ) ] = html_entity_decode( '' !== $pair[2] ? $pair[2] : ( $pair[3] ?? '' ), ENT_QUOTES, 'UTF-8' );
+			}
+		}
+
+		$found[] = $attrs;
+	}
+
+	return $found;
+}
+
+/**
+ * Content of the first meta tag whose name or property matches.
+ *
+ * @param array[] $metas Meta tags from lcp_yeast_seo_health_head_tags().
+ * @param string  $key   name or property.
+ * @param string  $value Value to match, case-insensitive.
+ * @return string|null Content, or null when the tag is absent.
+ */
+function lcp_yeast_seo_health_meta_content( array $metas, $key, $value ) {
+	foreach ( $metas as $attrs ) {
+		if ( isset( $attrs[ $key ] ) && 0 === strcasecmp( $attrs[ $key ], $value ) ) {
+			return trim( preg_replace( '/\s+/u', ' ', $attrs['content'] ?? '' ) );
+		}
+	}
+
+	return null;
+}
+
+/**
+ * Lower-cases the host and drops the fragment, so canonicals compare fairly.
+ *
+ * @param string $url URL.
+ * @return string
+ */
+function lcp_yeast_seo_health_normalize_url( $url ) {
+	$url   = preg_replace( '/#.*$/', '', trim( (string) $url ) );
+	$parts = wp_parse_url( $url );
+
+	if ( empty( $parts['host'] ) ) {
+		return $url;
+	}
+
+	return strtolower( ( $parts['scheme'] ?? 'https' ) . '://' . $parts['host'] . ( isset( $parts['port'] ) ? ':' . $parts['port'] : '' ) )
+		. ( $parts['path'] ?? '' ) . ( isset( $parts['query'] ) ? '?' . $parts['query'] : '' );
+}
+
+/**
+ * Checks a page's head for what search results are built from: title,
+ * description, indexability, canonical, plus the H1 and social tags.
+ *
+ * Pages marked noindex get only a note, since they are not meant to appear.
+ * When the whole site is hidden from search engines (Settings, Reading) that
+ * noindex is ignored: it says nothing about any one page, and the checks still
+ * run so a site in development can be prepared for launch.
+ *
+ * @param string $html        Page HTML.
+ * @param string $page_url    The page's own URL, which its canonical should match.
+ * @param bool   $site_hidden Whether the site is set to discourage search engines.
+ * @return array{issues:array[],facts:array}
+ */
+function lcp_yeast_seo_health_analyze_meta( $html, $page_url, $site_hidden = false ) {
+	$issues = array();
+	$push   = static function ( $level, $code, $message ) use ( &$issues ) {
+		$issues[] = array(
+			'level'   => $level,
+			'code'    => $code,
+			'message' => $message,
+		);
+	};
+
+	$html  = (string) $html;
+	$end   = stripos( $html, '</head>' );
+	$head  = false === $end ? $html : substr( $html, 0, $end );
+	$metas = lcp_yeast_seo_health_head_tags( $head, 'meta' );
+	$title = preg_match( '#<title[^>]*>(.*?)</title>#is', $head, $found ) ? trim( preg_replace( '/\s+/u', ' ', html_entity_decode( wp_strip_all_tags( $found[1] ), ENT_QUOTES, 'UTF-8' ) ) ) : '';
+	$desc  = (string) lcp_yeast_seo_health_meta_content( $metas, 'name', 'description' );
+	$robot = strtolower( (string) lcp_yeast_seo_health_meta_content( $metas, 'name', 'robots' ) );
+	$noidx = ! $site_hidden && false !== strpos( $robot, 'noindex' );
+
+	$facts = array(
+		'title'       => $title,
+		'description' => $desc,
+		'indexable'   => ! $noidx,
+	);
+
+	if ( $noidx ) {
+		$push( 'warning', 'meta_noindex', 'This page is marked noindex, yet it is in your sitemap.' );
+
+		return array(
+			'issues' => $issues,
+			'facts'  => $facts,
+		);
+	}
+
+	$title_len = mb_strlen( $title );
+	$desc_len  = mb_strlen( $desc );
+
+	if ( 0 === $title_len ) {
+		$push( 'error', 'meta_no_title', 'The page has no title.' );
+	} elseif ( $title_len > LCP_YEAST_SEO_HEALTH_TITLE_MAX ) {
+		$push( 'warning', 'meta_title_long', 'The title is ' . $title_len . ' characters; search results usually cut it off after about ' . LCP_YEAST_SEO_HEALTH_TITLE_MAX . '.' );
+	} elseif ( $title_len < LCP_YEAST_SEO_HEALTH_TITLE_MIN ) {
+		$push( 'warning', 'meta_title_short', 'The title is only ' . $title_len . ' characters, which says little about the page.' );
+	}
+
+	if ( 0 === $desc_len ) {
+		$push( 'error', 'meta_no_description', 'The page has no meta description.' );
+	} elseif ( $desc_len > LCP_YEAST_SEO_HEALTH_DESCRIPTION_MAX ) {
+		$push( 'warning', 'meta_description_long', 'The description is ' . $desc_len . ' characters; search results usually cut it off after about ' . LCP_YEAST_SEO_HEALTH_DESCRIPTION_MAX . '.' );
+	} elseif ( $desc_len < LCP_YEAST_SEO_HEALTH_DESCRIPTION_MIN ) {
+		$push( 'warning', 'meta_description_short', 'The description is only ' . $desc_len . ' characters; there is room to say more.' );
+	}
+
+	$canonical = '';
+
+	foreach ( lcp_yeast_seo_health_head_tags( $head, 'link' ) as $attrs ) {
+		if ( isset( $attrs['rel'], $attrs['href'] ) && in_array( 'canonical', preg_split( '/\s+/', strtolower( $attrs['rel'] ) ), true ) ) {
+			$canonical = $attrs['href'];
+			break;
+		}
+	}
+
+	if ( '' === $canonical ) {
+		$push( 'warning', 'meta_no_canonical', 'The page has no canonical link.' );
+	} elseif ( lcp_yeast_seo_health_normalize_url( $canonical ) !== lcp_yeast_seo_health_normalize_url( $page_url ) ) {
+		$push( 'warning', 'meta_canonical_other', 'The canonical link points to ' . $canonical . ', not to this page.' );
+	}
+
+	$h1s = preg_match_all( '/<h1\b/i', $html );
+
+	if ( 0 === $h1s ) {
+		$push( 'warning', 'meta_no_h1', 'The page has no main heading (H1).' );
+	} elseif ( $h1s > 1 ) {
+		$push( 'warning', 'meta_multiple_h1', 'The page has ' . $h1s . ' main headings (H1); one is clearer.' );
+	}
+
+	if ( '' === (string) lcp_yeast_seo_health_meta_content( $metas, 'property', 'og:title' ) ) {
+		$push( 'warning', 'meta_no_og_title', 'The page has no social sharing title (og:title).' );
+	}
+
+	if ( '' === (string) lcp_yeast_seo_health_meta_content( $metas, 'property', 'og:image' ) ) {
+		$push( 'warning', 'meta_no_og_image', 'The page has no social sharing image (og:image).' );
+	}
+
+	return array(
+		'issues' => $issues,
+		'facts'  => $facts,
+	);
+}
+
+/**
+ * Adds the cross-page checks: titles and descriptions used on more than one page.
+ *
+ * Those can't be judged one page at a time, so they are worked out from the
+ * stored results each time the dashboard is drawn, and the status is redone.
+ *
+ * @param int[] $ids     Page IDs in scope.
+ * @param array $results Stored results.
+ * @return array Results for those pages, with duplicates added.
+ */
+function lcp_yeast_seo_health_effective( array $ids, array $results ) {
+	$groups = array(
+		'title'       => array(),
+		'description' => array(),
+	);
+
+	foreach ( $ids as $id ) {
+		$facts = $results[ $id ]['meta'] ?? null;
+
+		if ( ! $facts || empty( $facts['indexable'] ) ) {
+			continue;
+		}
+
+		foreach ( array_keys( $groups ) as $field ) {
+			$value = mb_strtolower( (string) $facts[ $field ] );
+
+			if ( '' !== $value ) {
+				$groups[ $field ][ $value ][] = $id;
+			}
+		}
+	}
+
+	$effective = array();
+
+	foreach ( $ids as $id ) {
+		if ( ! isset( $results[ $id ] ) ) {
+			continue;
+		}
+
+		$result = $results[ $id ];
+
+		foreach ( array_keys( $groups ) as $field ) {
+			$value  = mb_strtolower( (string) ( $result['meta'][ $field ] ?? '' ) );
+			$others = '' !== $value && ! empty( $result['meta']['indexable'] ) ? array_values( array_diff( $groups[ $field ][ $value ] ?? array(), array( $id ) ) ) : array();
+
+			if ( ! $others ) {
+				continue;
+			}
+
+			$result['issues'][] = array(
+				'level'   => 'error',
+				'code'    => 'meta_duplicate_' . $field,
+				'message' => 'The ' . $field . ' is also used on ' . lcp_yeast_seo_count_noun( count( $others ), 'other page' ) . ', such as "' . wp_strip_all_tags( get_the_title( $others[0] ) ) . '".',
+				'summary' => 'Pages share the same ' . $field . '.',
+			);
+		}
+
+		$result['status'] = lcp_yeast_seo_health_status_of( $result['issues'] );
+		$effective[ $id ] = $result;
+	}
+
+	return $effective;
+}
+
+/**
  * A short plain-language hint on how to fix a kind of problem.
  *
  * @param string $code Issue code.
@@ -373,6 +662,21 @@ function lcp_yeast_seo_health_hint( $code ) {
 		'no_name'                  => 'Add a name to that entity in your Organization JSON-LD under Schema.',
 		'localbusiness_no_address' => 'Add a postal address to the LocalBusiness in your Organization JSON-LD under Schema.',
 		'fetch_failed'             => 'The server could not reach its own page. A firewall, basic authentication or a local address can cause this.',
+		'meta_noindex'             => 'Either remove it from the sitemap by keeping it noindex, or turn noindex off in the page\'s Yeast SEO settings.',
+		'meta_no_title'            => 'Give the page a title in its Yeast SEO modal, or set a title template for its post type under General.',
+		'meta_title_long'          => 'Shorten the title in the page\'s Yeast SEO modal, putting the key words first.',
+		'meta_title_short'         => 'Write a fuller title in the page\'s Yeast SEO modal.',
+		'meta_no_description'      => 'Write a description in the page\'s Yeast SEO modal, or switch on automatic descriptions under General.',
+		'meta_description_long'    => 'Shorten the description in the page\'s Yeast SEO modal.',
+		'meta_description_short'   => 'Expand the description in the page\'s Yeast SEO modal to sum up the page.',
+		'meta_no_canonical'        => 'A canonical link should be printed by the plugin. Check another plugin or the theme is not removing it.',
+		'meta_canonical_other'     => 'Check the canonical set in the page\'s Yeast SEO modal, or whether another plugin is changing it.',
+		'meta_no_h1'               => 'Add a main heading to the page, usually the title block in the theme.',
+		'meta_multiple_h1'         => 'Keep one main heading and turn the others into H2s.',
+		'meta_no_og_title'         => 'Social tags come from the Yeast SEO modal. Check nothing else is stopping them printing.',
+		'meta_no_og_image'         => 'Set a featured image, or add a social image in the page\'s Yeast SEO modal.',
+		'meta_duplicate_title'     => 'Give each page its own title in its Yeast SEO modal.',
+		'meta_duplicate_description' => 'Give each page its own description in its Yeast SEO modal.',
 	);
 
 	if ( 0 === strpos( $code, 'duplicate_' ) ) {
@@ -452,7 +756,15 @@ function lcp_yeast_seo_health_check_post( $post_id ) {
 		return $result;
 	}
 
-	return array_merge( $result, lcp_yeast_seo_health_analyze( wp_remote_retrieve_body( $response ), (string) wp_parse_url( home_url(), PHP_URL_HOST ) ) );
+	$body   = wp_remote_retrieve_body( $response );
+	$result = array_merge( $result, lcp_yeast_seo_health_analyze( $body, (string) wp_parse_url( home_url(), PHP_URL_HOST ) ) );
+	$meta   = lcp_yeast_seo_health_analyze_meta( $body, $url, ! get_option( 'blog_public' ) );
+
+	$result['issues'] = array_merge( $result['issues'], $meta['issues'] );
+	$result['meta']   = $meta['facts'];
+	$result['status'] = lcp_yeast_seo_health_status_of( $result['issues'] );
+
+	return $result;
 }
 
 /**
@@ -551,7 +863,7 @@ function lcp_yeast_seo_health_common_problems( array $ids, array $results ) {
 				$problems[ $key ] = array(
 					'code'    => $key,
 					'level'   => $issue['level'],
-					'message' => $issue['message'],
+					'message' => $issue['summary'] ?? $issue['message'],
 					'pages'   => 0,
 				);
 			}

@@ -75,7 +75,11 @@ one feature at a time.
   `@id` references that point nowhere, and missing recommended properties
   (articles, breadcrumbs, FAQs, local businesses). Each problem comes with a
   fix, the most widespread are listed first, and a page can be re-checked
-  alone. A starter jar fills with the share of healthy pages.
+  alone. It also checks each page's search listing (title and description
+  present, sensible length and not shared with another page; canonical
+  present and self-pointing; one H1; social tags), keeping Schema and Meta
+  as separate marks. noindex pages are only noted. A starter jar fills with
+  the share of healthy pages.
 - **robots.txt editor** (own tab): rules saved there replace WordPress's
   default file. Saving is blocked if they would hide the whole site from
   Google or Bing, or exceed 500 KiB, unless overridden; other likely mistakes
