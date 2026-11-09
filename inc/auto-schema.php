@@ -42,7 +42,8 @@ function lcp_yeast_seo_auto_schema_type_groups() {
  * Context keys: home_url, site_name, tagline, language, org_id, is_front,
  * declared_types (types the page's own schema already declares), and page
  * (null, or url, name, description, kind, article_type, published, modified,
- * author {name, url}, image, breadcrumbs [[name, url], ...]).
+ * author {name, url}, image, breadcrumbs [[name, url], ...], items
+ * [[name, url], ...] and items_start, for a listing page).
  *
  * @param array $ctx Context.
  * @return array[] Entity nodes without @context.
@@ -121,6 +122,18 @@ function lcp_yeast_seo_build_auto_graph( array $ctx ) {
 
 		if ( $want_crumbs ) {
 			$webpage['breadcrumb'] = array( '@id' => $breadcrumb_id );
+		}
+
+		if ( 'CollectionPage' === $webpage['@type'] ) {
+			if ( $org_ref ) {
+				$webpage['about'] = $org_ref;
+			}
+
+			$list = lcp_yeast_seo_build_item_list( $url . '#postlist', (array) ( $page['items'] ?? array() ), (int) ( $page['items_start'] ?? 0 ) );
+
+			if ( $list ) {
+				$webpage['mainEntity'] = $list;
+			}
 		}
 
 		if ( '' !== (string) $ctx['language'] ) {
@@ -212,6 +225,60 @@ function lcp_yeast_seo_build_auto_graph( array $ctx ) {
 	}
 
 	return $nodes;
+}
+
+/**
+ * Builds an ItemList node from [name, url] pairs.
+ *
+ * @param string  $id     The list's @id.
+ * @param array[] $items  List of [name, url].
+ * @param int     $offset Items listed on earlier pages, so positions continue.
+ * @return array|null Null when there are no items.
+ */
+function lcp_yeast_seo_build_item_list( $id, array $items, $offset = 0 ) {
+	if ( ! $items ) {
+		return null;
+	}
+
+	$elements = array();
+
+	foreach ( array_values( $items ) as $index => $item ) {
+		$elements[] = array(
+			'@type'    => 'ListItem',
+			'position' => $offset + $index + 1,
+			'name'     => $item[0],
+			'url'      => $item[1],
+		);
+	}
+
+	return array(
+		'@type'           => 'ItemList',
+		'@id'             => $id,
+		'numberOfItems'   => count( $elements ),
+		'itemListElement' => $elements,
+	);
+}
+
+/**
+ * The posts the main query is showing, as [name, url] pairs, skipping any set
+ * to noindex. Reads the query as it stands, so it matches what the page lists.
+ *
+ * @return array[]
+ */
+function lcp_yeast_seo_listing_items() {
+	global $wp_query;
+
+	$items = array();
+
+	foreach ( (array) $wp_query->posts as $post ) {
+		if ( lcp_yeast_seo_post_is_noindex( $post->ID ) ) {
+			continue;
+		}
+
+		$items[] = array( lcp_yeast_seo_plain_title( $post->ID ), get_permalink( $post->ID ) );
+	}
+
+	return $items;
 }
 
 /**
@@ -313,8 +380,10 @@ function lcp_yeast_seo_auto_schema_context() {
 		$is_index      = is_home();
 		$author_id     = $post ? (int) $post->post_author : 0;
 
+		$paged = max( (int) get_query_var( 'paged' ), 1 );
+
 		$ctx['page'] = array(
-			'url'          => $is_front ? home_url( '/' ) : get_permalink( $post_id ),
+			'url'          => $is_front ? home_url( '/' ) : ( $is_index ? lcp_yeast_seo_current_archive_url() : get_permalink( $post_id ) ),
 			'name'         => lcp_yeast_seo_plain_title( $post_id ),
 			'description'  => lcp_yeast_seo_effective_description(),
 			'kind'         => $is_index ? 'CollectionPage' : 'WebPage',
@@ -327,6 +396,8 @@ function lcp_yeast_seo_auto_schema_context() {
 			) : null,
 			'image'        => lcp_yeast_seo_get_post_image( $post_id ),
 			'breadcrumbs'  => $is_front ? array() : lcp_yeast_seo_breadcrumb_trail( $post_id ),
+			'items'        => $is_index ? lcp_yeast_seo_listing_items() : array(),
+			'items_start'  => ( $paged - 1 ) * (int) get_option( 'posts_per_page' ),
 		);
 	} elseif ( $is_front ) {
 		$ctx['page'] = array(
@@ -335,6 +406,8 @@ function lcp_yeast_seo_auto_schema_context() {
 			'description'  => $ctx['tagline'],
 			'kind'         => 'CollectionPage',
 			'article_type' => '',
+			'items'        => is_home() ? lcp_yeast_seo_listing_items() : array(),
+			'items_start'  => ( max( (int) get_query_var( 'paged' ), 1 ) - 1 ) * (int) get_option( 'posts_per_page' ),
 		);
 	}
 

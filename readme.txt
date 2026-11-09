@@ -3,7 +3,7 @@ Tags: seo, schema, sitemap, meta description, open graph
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 0.7.0
+Stable tag: 0.8.0
 
 Per-post SEO controls for titles, descriptions, social tags, canonical URLs and schema, with XML sitemaps. Built to replace Yoast one feature at a time.
 
@@ -30,9 +30,15 @@ Unit tests need no WordPress or database:
 
 After every deploy, run the smoke test against the live site. It checks the sitemaps are served directly (no redirects), are valid, and only use tags search engines accept:
 
-    LCP_SMOKE_URL=https://example.com composer test:smoke
+    LCP_SMOKE_URL=https://example.com LCP_SMOKE_ARCHIVE=/guides/ composer test:smoke
 
 == Changelog ==
+
+= 0.8.0 =
+* New: the posts page (and a front page that lists latest posts) now carries an `ItemList` of the posts it shows as the `CollectionPage`'s `mainEntity`, with positions that continue across pages, plus `about` pointing at the Organization when there is one. Posts set to noindex are left out. Paginated pages use their own URL.
+
+= 0.7.1 =
+* Fix: the canonical tag on archives and the posts page no longer echoes query-string parameters such as `utm_source`, `fbclid` or a cache-busting `v`, which made every tracked URL its own canonical. Only arguments WordPress itself uses (such as `paged`) are kept; filter: `lcp_yeast_seo_canonical_query_args`.
 
 = 0.7.0 =
 * New: title templates per post type (tags: %title%, %sitename%, %tagline%, %sep%) and a configurable separator. Empty templates keep WordPress's normal titles.

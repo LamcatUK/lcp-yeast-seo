@@ -118,7 +118,7 @@ editor UI, but never touches already-saved field content.
 ```
 composer install
 composer test                                   # unit tests, no WordPress or database
-LCP_SMOKE_URL=https://example.com composer test:smoke   # run after every deploy
+LCP_SMOKE_URL=https://example.com LCP_SMOKE_ARCHIVE=/guides/ composer test:smoke   # after every deploy
 ```
 
 The smoke test fetches the live sitemaps and checks they are served directly

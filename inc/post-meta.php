@@ -891,6 +891,45 @@ function lcp_yeast_seo_render_frontend_meta() {
 add_action( 'wp_head', 'lcp_yeast_seo_render_frontend_meta', 1 );
 
 /**
+ * Removes query-string arguments that aren't in a keep list.
+ *
+ * Used for archive canonicals, which would otherwise echo tracking and cache
+ * parameters (utm_source, fbclid, v) and make every variant its own canonical.
+ *
+ * @param string   $url  URL, possibly with a query string.
+ * @param string[] $keep Argument names to keep.
+ * @return string
+ */
+function lcp_yeast_seo_strip_query_args( $url, array $keep ) {
+	$parts = explode( '?', $url, 2 );
+
+	if ( ! isset( $parts[1] ) ) {
+		return $url;
+	}
+
+	parse_str( $parts[1], $args );
+
+	$args = array_intersect_key( $args, array_flip( $keep ) );
+
+	return $parts[0] . ( $args ? '?' . http_build_query( $args ) : '' );
+}
+
+/**
+ * The clean URL of the current archive page, including pagination but not
+ * tracking parameters.
+ *
+ * @return string
+ */
+function lcp_yeast_seo_current_archive_url() {
+	global $wp;
+
+	$paged = max( (int) get_query_var( 'paged' ), (int) get_query_var( 'page' ), 1 );
+	$keep  = (array) apply_filters( 'lcp_yeast_seo_canonical_query_args', $wp->public_query_vars );
+
+	return lcp_yeast_seo_strip_query_args( (string) get_pagenum_link( $paged, false ), $keep );
+}
+
+/**
  * Outputs a canonical link tag for non-singular views.
  *
  * WordPress core's own rel_canonical() (wp-includes/link-template.php) only
@@ -917,8 +956,7 @@ function lcp_yeast_seo_render_canonical() {
 	if ( '' !== $custom_canonical ) {
 		$url = $custom_canonical;
 	} else {
-		$paged = max( (int) get_query_var( 'paged' ), (int) get_query_var( 'page' ), 1 );
-		$url   = get_pagenum_link( $paged, false );
+		$url = lcp_yeast_seo_current_archive_url();
 	}
 
 	if ( ! $url ) {

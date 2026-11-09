@@ -145,6 +145,72 @@ class AutoSchemaTest extends TestCase {
 		$this->assertSame( array( 'WebSite' ), $this->types( lcp_yeast_seo_build_auto_graph( $this->context( array( 'page' => null ) ) ) ) );
 	}
 
+	private function listing_context( array $page = array(), array $ctx = array() ) {
+		return $this->context(
+			$ctx + array(
+				'page' => $page + array(
+					'url'          => 'http://example.test/guides/',
+					'name'         => 'Guides',
+					'description'  => '',
+					'kind'         => 'CollectionPage',
+					'article_type' => '',
+					'breadcrumbs'  => array(),
+					'items'        => array(
+						array( 'First guide', 'http://example.test/guides/first/' ),
+						array( 'Second guide', 'http://example.test/guides/second/' ),
+					),
+					'items_start'  => 0,
+				),
+			)
+		);
+	}
+
+	public function test_a_listing_page_carries_an_item_list_of_its_posts() {
+		$webpage = $this->node( lcp_yeast_seo_build_auto_graph( $this->listing_context() ), 'CollectionPage' );
+		$list    = $webpage['mainEntity'];
+
+		$this->assertSame( 'ItemList', $list['@type'] );
+		$this->assertSame( 'http://example.test/guides/#postlist', $list['@id'] );
+		$this->assertSame( 2, $list['numberOfItems'] );
+		$this->assertSame( array( 1, 2 ), array_column( $list['itemListElement'], 'position' ) );
+		$this->assertSame( 'http://example.test/guides/second/', $list['itemListElement'][1]['url'] );
+		$this->assertSame( 'First guide', $list['itemListElement'][0]['name'] );
+	}
+
+	public function test_item_positions_continue_on_later_pages() {
+		$list = $this->node( lcp_yeast_seo_build_auto_graph( $this->listing_context( array( 'items_start' => 10 ) ) ), 'CollectionPage' )['mainEntity'];
+
+		$this->assertSame( array( 11, 12 ), array_column( $list['itemListElement'], 'position' ) );
+		$this->assertSame( 2, $list['numberOfItems'], 'counts the items on this page, not the whole archive' );
+	}
+
+	public function test_an_empty_listing_has_no_item_list() {
+		$webpage = $this->node( lcp_yeast_seo_build_auto_graph( $this->listing_context( array( 'items' => array() ) ) ), 'CollectionPage' );
+
+		$this->assertArrayNotHasKey( 'mainEntity', $webpage );
+	}
+
+	public function test_a_listing_page_is_about_the_organization_when_there_is_one() {
+		$with    = $this->node( lcp_yeast_seo_build_auto_graph( $this->listing_context( array(), array( 'org_id' => 'http://example.test/#organization' ) ) ), 'CollectionPage' );
+		$without = $this->node( lcp_yeast_seo_build_auto_graph( $this->listing_context() ), 'CollectionPage' );
+
+		$this->assertSame( 'http://example.test/#organization', $with['about']['@id'] );
+		$this->assertArrayNotHasKey( 'about', $without );
+	}
+
+	public function test_ordinary_pages_never_get_an_item_list_or_about() {
+		$webpage = $this->node( lcp_yeast_seo_build_auto_graph( $this->context( array( 'org_id' => 'http://example.test/#organization' ) ) ), 'WebPage' );
+
+		$this->assertArrayNotHasKey( 'mainEntity', $webpage );
+		$this->assertArrayNotHasKey( 'about', $webpage );
+	}
+
+	public function test_a_custom_collection_page_means_no_generated_list() {
+		$nodes = lcp_yeast_seo_build_auto_graph( $this->listing_context( array(), array( 'declared_types' => array( 'CollectionPage' ) ) ) );
+
+		$this->assertNull( $this->node( $nodes, 'CollectionPage' ) );
+	}
+
 	public function test_output_encodes_as_valid_json() {
 		$json = json_encode( lcp_yeast_seo_build_auto_graph( $this->context() ), JSON_UNESCAPED_SLASHES );
 
