@@ -322,6 +322,8 @@ function lcp_yeast_seo_register_settings_page() {
 	add_settings_section( 'lcp_yeast_seo_defaults', 'Social sharing', 'lcp_yeast_seo_render_social_intro', 'lcp-yeast-seo' );
 	add_settings_section( 'lcp_yeast_seo_sitemaps', 'XML sitemaps', 'lcp_yeast_seo_render_sitemaps_intro', 'lcp-yeast-seo' );
 	add_settings_section( 'lcp_yeast_seo_organization', 'Organization schema', 'lcp_yeast_seo_render_organization_intro', 'lcp-yeast-seo-schema' );
+	add_settings_section( 'lcp_yeast_seo_org_score', 'Organization schema score', 'lcp_yeast_seo_render_org_score_intro', 'lcp-yeast-seo-schema' );
+	add_settings_field( 'org_score', 'Completeness', 'lcp_yeast_seo_render_org_score_field', 'lcp-yeast-seo-schema', 'lcp_yeast_seo_org_score' );
 
 	add_settings_field(
 		'enable_schema',

@@ -9,6 +9,7 @@
 	var summary = root.querySelector( '[data-health-summary]' );
 	var list = root.querySelector( '[data-health-list]' );
 	var scanButton = root.querySelector( '[data-health-scan]' );
+	var linksButton = root.querySelector( '[data-health-links]' );
 	var recheckButtons = root.querySelectorAll( '[data-health-recheck]' );
 	var progress = root.querySelector( '[data-health-progress]' );
 	var bar = root.querySelector( '[data-health-bar]' );
@@ -49,6 +50,84 @@
 				clearTimeout( timer );
 				throw error;
 			} );
+	}
+
+	function postLinks( reset ) {
+		var body = new URLSearchParams();
+		var controller = typeof AbortController === 'function' ? new AbortController() : null;
+		var timer = controller ? setTimeout( function () {
+			controller.abort();
+		}, config.requestTimeout * 1000 ) : null;
+
+		body.append( 'action', 'lcp_yeast_seo_health_links' );
+		body.append( '_ajax_nonce', config.nonce );
+
+		if ( reset ) {
+			body.append( 'reset', '1' );
+		}
+
+		return fetch( config.ajax, { method: 'POST', credentials: 'same-origin', body: body, signal: controller ? controller.signal : undefined } )
+			.then( function ( response ) {
+				return response.json();
+			} )
+			.then( function ( result ) {
+				clearTimeout( timer );
+
+				if ( ! result || ! result.success ) {
+					throw new Error( 'The server could not check the links.' );
+				}
+
+				summary.innerHTML = result.data.summary;
+				list.innerHTML = result.data.list;
+
+				return result.data;
+			}, function ( error ) {
+				clearTimeout( timer );
+				throw error;
+			} );
+	}
+
+	// Checks the links the scan collected, a few seconds' worth at a time, until none are left.
+	function checkLinks( reset ) {
+		return new Promise( function ( resolve ) {
+			var total = null;
+			var failures = 0;
+
+			function step( first ) {
+				postLinks( first && reset )
+					.then( function ( data ) {
+						var left = data.remaining;
+
+						failures = 0;
+						total = null === total ? data.checked + left : total;
+
+						if ( total ) {
+							bar.style.width = Math.round( ( 100 * ( total - left ) ) / total ) + '%';
+							status.textContent = left ? 'Checking links: ' + ( total - left ) + ' of ' + total + '.' : 'Links checked.';
+						}
+
+						if ( left > 0 && data.checked > 0 ) {
+							step( false );
+						} else {
+							resolve();
+						}
+					} )
+					.catch( function () {
+						failures += 1;
+
+						if ( failures >= 3 ) {
+							status.textContent = 'Some links could not be checked. Try again in a moment.';
+							resolve();
+						} else {
+							step( false );
+						}
+					} );
+			}
+
+			status.textContent = 'Checking links.';
+			bar.style.width = '0%';
+			step( true );
+		} );
 	}
 
 	function syncFilter() {
@@ -110,6 +189,7 @@
 	function setBusy( busy ) {
 		running = busy;
 		scanButton.disabled = busy;
+		linksButton.disabled = busy;
 		recheckButtons.forEach( function ( button ) {
 			button.disabled = busy;
 		} );
@@ -142,10 +222,14 @@
 
 		function next() {
 			if ( ! queue.length ) {
-				bar.style.width = '100%';
-				status.textContent = 'Scan finished. ' + ( total - skipped ) + ' pages checked.'
+				var summaryText = 'Scan finished. ' + ( total - skipped ) + ' pages checked.'
 					+ ( skipped ? ' ' + skipped + ( 1 === skipped ? ' page' : ' pages' ) + ' did not answer in time and ' + ( 1 === skipped ? 'was' : 'were' ) + ' skipped. Use Check again on them.' : '' );
-				setBusy( false );
+
+				checkLinks( false ).then( function () {
+					bar.style.width = '100%';
+					status.textContent = summaryText + ' Links checked.';
+					setBusy( false );
+				} );
 				return;
 			}
 
@@ -190,6 +274,19 @@
 		scan( config.ids );
 	} );
 
+	linksButton.addEventListener( 'click', function () {
+		if ( running ) {
+			return;
+		}
+
+		setBusy( true );
+		progress.hidden = false;
+		checkLinks( true ).then( function () {
+			bar.style.width = '100%';
+			setBusy( false );
+		} );
+	} );
+
 	recheckButtons.forEach( function ( button ) {
 		button.addEventListener( 'click', function () {
 			scan( idsWithStatus( button.getAttribute( 'data-health-recheck' ) ) );
@@ -211,6 +308,9 @@
 			status.textContent = 'Checking this page.';
 
 			post( [ id ] )
+				.then( function () {
+					return checkLinks( false );
+				} )
 				.then( function () {
 					bar.style.width = '100%';
 					status.textContent = 'Checked again.';

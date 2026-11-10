@@ -3,7 +3,7 @@ Tags: seo, schema, sitemap, meta description, open graph
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 0.17.0
+Stable tag: 0.18.0
 
 Per-post SEO controls for titles, descriptions, social tags, canonical URLs and schema, with XML sitemaps. Built to replace Yoast one feature at a time.
 
@@ -33,6 +33,11 @@ After every deploy, run the smoke test against the live site. It checks the site
     LCP_SMOKE_URL=https://example.com LCP_SMOKE_ARCHIVE=/guides/ composer test:smoke
 
 == Changelog ==
+
+= 0.18.0 =
+* New: Organization schema score on the Schema tab. It reads your Organization (from the form or the pasted JSON-LD, following references inside a graph), scores it out of 100 across Identity, Brand, Contact, Local details and Trust, lists what is missing with the points each is worth, and gives advice that fits the source you use, with a snippet to paste for JSON-LD. Local-business checks (opening hours, map position, area served, price range) only count for local business types.
+* New: the Health scan now also checks image alt text (an image with no alt attribute, or an alt that is only a file name; empty alt is accepted as decorative), broken links (checked after the page scan, cached, from a stored list only), and orphan pages (no other scanned page links to them). Each page row gets a third "Content" mark, and there is a "Re-check all links" button. Filter: `lcp_yeast_seo_health_max_links`.
+* Groundwork (no screen yet): the merge logic for a question-and-answer that will fill in the missing Organization details.
 
 = 0.17.0 =
 * New: SEO for category, tag and other taxonomy pages, author pages, date pages, search results and post-type archives. Only the archives the active theme actually uses are offered. A theme counts as using one if its templates link to it (the_category, get_the_term_list, archive and author blocks and so on), it has a template for it, it is in a menu, or the theme has a general archive template; WooCommerce themes use the product taxonomies. The Archives card on the General tab lists what was found and why, tucks the rest into a collapsed section, and has a "Scan the theme again" link. Filter: `lcp_yeast_seo_archive_in_use`.

@@ -8,6 +8,8 @@ require_once dirname( __DIR__ ) . '/vendor/autoload.php';
 
 define( 'ABSPATH', dirname( __DIR__ ) . '/' );
 define( 'MINUTE_IN_SECONDS', 60 );
+define( 'DAY_IN_SECONDS', 86400 );
+define( 'HOUR_IN_SECONDS', 3600 );
 define( 'LCP_YEAST_SEO_PATH', dirname( __DIR__ ) . '/' );
 define( 'LCP_YEAST_SEO_URL', 'http://example.test/wp-content/plugins/lcp-yeast-seo/' );
 define( 'LCP_YEAST_SEO_VERSION', 'test' );

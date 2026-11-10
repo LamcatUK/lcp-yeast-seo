@@ -402,7 +402,7 @@ function lcp_yeast_seo_health_status_of( array $issues ) {
  * @return string ok, warning, error or none when it hasn't been checked.
  */
 function lcp_yeast_seo_health_area_status( $result, $area ) {
-	if ( ! $result || ( 'meta' === $area && ! isset( $result['meta'] ) ) ) {
+	if ( ! $result || ( 'meta' === $area && ! isset( $result['meta'] ) ) || ( 'content' === $area && ! isset( $result['content'] ) ) ) {
 		return 'none';
 	}
 
@@ -417,13 +417,17 @@ function lcp_yeast_seo_health_area_status( $result, $area ) {
 }
 
 /**
- * Which area an issue belongs to: meta (title, description and the like) or schema.
+ * Which area an issue belongs to: meta (title, description and the like), content (images and links) or schema.
  *
  * @param string $code Issue code.
- * @return string meta or schema.
+ * @return string meta, content or schema.
  */
 function lcp_yeast_seo_health_area_of( $code ) {
-	return 0 === strpos( (string) $code, 'meta_' ) ? 'meta' : 'schema';
+	if ( 0 === strpos( (string) $code, 'meta_' ) ) {
+		return 'meta';
+	}
+
+	return 0 === strpos( (string) $code, 'content_' ) ? 'content' : 'schema';
 }
 
 /**
@@ -656,6 +660,11 @@ function lcp_yeast_seo_health_effective( array $ids, array $results ) {
 		$effective[ $id ] = $result;
 	}
 
+	// Broken links and orphans come from what the scan collected, if it collected any.
+	if ( array_filter( array_column( $effective, 'content' ) ) ) {
+		return lcp_yeast_seo_health_add_link_issues( $ids, $effective );
+	}
+
 	return $effective;
 }
 
@@ -684,6 +693,11 @@ function lcp_yeast_seo_health_hint( $code ) {
 		'no_name'                  => 'Add a name to that entity in your Organization JSON-LD under Schema.',
 		'localbusiness_no_address' => 'Add a postal address to the LocalBusiness in your Organization JSON-LD under Schema.',
 		'redirect_offsite'         => 'Mark the page noindex in its Yeast SEO modal to leave it out of the sitemap, or remove the redirect if it is not intended.',
+		'content_img_no_alt'       => 'Add alt text: in the Media Library (the Alt Text field), or in the image block\'s sidebar. Describe the image in a few words. Leave it empty only for purely decorative images.',
+		'content_img_bad_alt'      => 'Replace the file name with a short description of what the image shows.',
+		'content_broken_link'      => 'Edit the page and fix or remove the link. If the page moved, link to its new address (or add a redirect if it was your own).',
+		'content_link_unreachable' => 'The linked site did not answer properly. Open it in a browser; if it is gone for good, remove the link. A busy site may just have been slow, so check again.',
+		'content_orphan'           => 'Link to this page from a related page, or add it to a menu, so visitors and search engines can find it.',
 		'fetch_failed'             => 'The server could not fetch its own page, even through its own address. A firewall, bot protection, basic authentication or a very slow page can cause this. Use Check again, or see the lcp_yeast_seo_health_request_args filter to change the timeout or user agent.',
 		'meta_noindex'             => 'Either remove it from the sitemap by keeping it noindex, or turn noindex off in the page\'s Yeast SEO settings.',
 		'meta_no_title'            => 'Give the page a title in its Yeast SEO modal, or set a title template for its post type under General.',
@@ -959,9 +973,12 @@ function lcp_yeast_seo_health_check_post( $post_id ) {
 	$result = array_merge( $result, lcp_yeast_seo_health_analyze( $body, $site_host ) );
 	$meta   = lcp_yeast_seo_health_analyze_meta( $body, $hops ? lcp_yeast_seo_health_strip_scan_arg( $fetch_url ) : $url, ! get_option( 'blog_public' ) );
 
-	$result['issues'] = array_merge( $result['issues'], $meta['issues'] );
-	$result['meta']   = $meta['facts'];
-	$result['status'] = lcp_yeast_seo_health_status_of( $result['issues'] );
+	$content = lcp_yeast_seo_health_analyze_content( $body, $hops ? lcp_yeast_seo_health_strip_scan_arg( $fetch_url ) : $url, $post_id, lcp_yeast_seo_health_permalink_map() );
+
+	$result['issues']  = array_merge( $result['issues'], $meta['issues'], $content['issues'] );
+	$result['meta']    = $meta['facts'];
+	$result['content'] = $content['facts'];
+	$result['status']  = lcp_yeast_seo_health_status_of( $result['issues'] );
 
 	return $result;
 }
