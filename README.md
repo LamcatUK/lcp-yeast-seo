@@ -75,7 +75,7 @@ one feature at a time.
   `@id` references that point nowhere, and missing recommended properties
   (articles, breadcrumbs, FAQs, local businesses). Each problem comes with a
   fix, the most widespread are listed first, and a page can be re-checked
-  alone, and "Re-check pages with errors" re-runs just the failing ones. It also checks each page's search listing (title and description
+  alone, and "Re-check pages with errors" and "...with warnings" re-run just those pages. It also checks each page's search listing (title and description
   present, sensible length and not shared with another page; canonical
   present and self-pointing; one H1; social tags), keeping Schema and Meta
   as separate marks. noindex pages are only noted. A starter jar fills with

@@ -9,7 +9,7 @@
 	var summary = root.querySelector( '[data-health-summary]' );
 	var list = root.querySelector( '[data-health-list]' );
 	var scanButton = root.querySelector( '[data-health-scan]' );
-	var recheckErrors = root.querySelector( '[data-health-recheck-errors]' );
+	var recheckButtons = root.querySelectorAll( '[data-health-recheck]' );
 	var progress = root.querySelector( '[data-health-progress]' );
 	var bar = root.querySelector( '[data-health-bar]' );
 	var status = root.querySelector( '[data-health-status]' );
@@ -92,23 +92,27 @@
 		}
 	}
 
-	function errorIds() {
-		return Array.prototype.map.call( root.querySelectorAll( '.lcp-ys-row[data-status="error"]' ), function ( row ) {
+	function idsWithStatus( rowStatus ) {
+		return Array.prototype.map.call( root.querySelectorAll( '.lcp-ys-row[data-status="' + rowStatus + '"]' ), function ( row ) {
 			return parseInt( row.getAttribute( 'data-id' ), 10 );
 		} );
 	}
 
 	function updateRecheck() {
-		var count = errorIds().length;
+		recheckButtons.forEach( function ( button ) {
+			var count = idsWithStatus( button.getAttribute( 'data-health-recheck' ) ).length;
 
-		recheckErrors.hidden = 0 === count;
-		recheckErrors.textContent = 'Re-check ' + count + ( 1 === count ? ' page' : ' pages' ) + ' with errors';
+			button.hidden = 0 === count;
+			button.textContent = 'Re-check ' + count + ( 1 === count ? ' page' : ' pages' ) + ' with ' + ( 'error' === button.getAttribute( 'data-health-recheck' ) ? ( 1 === count ? 'an error' : 'errors' ) : ( 1 === count ? 'a warning' : 'warnings' ) );
+		} );
 	}
 
 	function setBusy( busy ) {
 		running = busy;
 		scanButton.disabled = busy;
-		recheckErrors.disabled = busy;
+		recheckButtons.forEach( function ( button ) {
+			button.disabled = busy;
+		} );
 		root.querySelectorAll( '[data-recheck]' ).forEach( function ( button ) {
 			button.disabled = busy;
 		} );
@@ -186,8 +190,10 @@
 		scan( config.ids );
 	} );
 
-	recheckErrors.addEventListener( 'click', function () {
-		scan( errorIds() );
+	recheckButtons.forEach( function ( button ) {
+		button.addEventListener( 'click', function () {
+			scan( idsWithStatus( button.getAttribute( 'data-health-recheck' ) ) );
+		} );
 	} );
 
 	updateRecheck();

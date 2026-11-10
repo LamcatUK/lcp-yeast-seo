@@ -426,7 +426,8 @@ function lcp_yeast_seo_health_render_tab() {
 			<div data-health-summary><?php lcp_yeast_seo_health_render_summary( true ); ?></div>
 			<div class="lcp-ys-scan">
 				<button type="button" class="button button-primary button-hero" data-health-scan>Scan site</button>
-				<button type="button" class="button" data-health-recheck-errors hidden>Re-check pages with errors</button>
+				<button type="button" class="button" data-health-recheck="error" hidden>Re-check pages with errors</button>
+				<button type="button" class="button" data-health-recheck="warning" hidden>Re-check pages with warnings</button>
 				<div class="lcp-ys-progress" data-health-progress hidden>
 					<div class="lcp-ys-progress__track"><div class="lcp-ys-progress__bar" data-health-bar></div></div>
 					<p class="lcp-ys-progress__text" data-health-status role="status" aria-live="polite"></p>
