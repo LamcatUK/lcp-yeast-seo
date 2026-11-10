@@ -514,7 +514,6 @@ function lcp_yeast_seo_render_org_wizard_field() {
 		<p class="lcp-ys-wiz__nav">
 			<button type="button" class="button" data-wizard-back>Back</button>
 			<button type="button" class="button button-primary" data-wizard-next>Next</button>
-			<button type="button" class="button button-primary" data-wizard-preview hidden>Preview</button>
 			<button type="submit" class="button button-primary" data-wizard-save form="<?php echo esc_attr( $form ); ?>" hidden>Save to my schema</button>
 			<span class="description" data-wizard-position></span>
 		</p>

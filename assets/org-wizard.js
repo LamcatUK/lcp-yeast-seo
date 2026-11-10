@@ -11,7 +11,6 @@
 	var tabs = Array.prototype.slice.call( root.querySelectorAll( '[data-wizard-tab]' ) );
 	var back = root.querySelector( '[data-wizard-back]' );
 	var next = root.querySelector( '[data-wizard-next]' );
-	var previewButton = root.querySelector( '[data-wizard-preview]' );
 	var save = root.querySelector( '[data-wizard-save]' );
 	var position = root.querySelector( '[data-wizard-position]' );
 	var review = root.querySelector( '[data-wizard-review]' );
@@ -30,7 +29,6 @@
 		} );
 		back.hidden = 0 === current;
 		next.hidden = current === last;
-		previewButton.hidden = current !== last;
 		save.hidden = true;
 		position.textContent = 'Step ' + ( current + 1 ) + ' of ' + steps.length;
 
@@ -129,7 +127,6 @@
 	next.addEventListener( 'click', function () {
 		show( current + 1 );
 	} );
-	previewButton.addEventListener( 'click', loadPreview );
 
 	// Enter in a text box moves on; it must not submit the form, which saves.
 	root.addEventListener( 'keydown', function ( event ) {

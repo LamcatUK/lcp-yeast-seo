@@ -1635,3 +1635,8 @@
 	font-size: 12px;
 	white-space: pre-wrap;
 }
+
+/* WordPress's button styles override the hidden attribute; make it win inside the wizard. */
+.lcp-ys-wiz [hidden] {
+	display: none !important;
+}
