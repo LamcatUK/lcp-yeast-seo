@@ -51,6 +51,47 @@
 			} );
 	}
 
+	function syncFilter() {
+		var mode = root.getAttribute( 'data-filter' );
+		var code = root.getAttribute( 'data-code' ) || '';
+		var label = root.getAttribute( 'data-code-label' ) || '';
+		var rows = root.querySelectorAll( '.lcp-ys-row' );
+		var shown = 0;
+		var bar = root.querySelector( '[data-filterbar]' );
+		var empty = root.querySelector( '[data-filter-empty]' );
+
+		rows.forEach( function ( row ) {
+			var rowStatus = row.getAttribute( 'data-status' );
+			var show = true;
+
+			if ( 'attention' === mode ) {
+				show = 'ok' !== rowStatus;
+			} else if ( 'error' === mode ) {
+				show = 'error' === rowStatus;
+			} else if ( 'ok' === mode ) {
+				show = 'ok' === rowStatus;
+			} else if ( 'code' === mode ) {
+				show = ( ' ' + ( row.getAttribute( 'data-codes' ) || '' ) + ' ' ).indexOf( ' ' + code + ' ' ) > -1;
+			}
+
+			row.classList.toggle( 'is-out', ! show );
+			shown += show ? 1 : 0;
+		} );
+
+		root.querySelectorAll( '.lcp-ys-filter__btn' ).forEach( function ( button ) {
+			button.classList.toggle( 'is-active', button.getAttribute( 'data-filter' ) === mode );
+		} );
+
+		if ( bar ) {
+			bar.hidden = 'code' !== mode;
+			bar.querySelector( '[data-filterbar-text]' ).textContent = 'Showing ' + shown + ( 1 === shown ? ' page' : ' pages' ) + ' with this problem: ' + ( label.length > 110 ? label.slice( 0, 107 ) + '...' : label );
+		}
+
+		if ( empty ) {
+			empty.hidden = shown > 0 || ! rows.length;
+		}
+	}
+
 	function errorIds() {
 		return Array.prototype.map.call( root.querySelectorAll( '.lcp-ys-row[data-status="error"]' ), function ( row ) {
 			return parseInt( row.getAttribute( 'data-id' ), 10 );
@@ -153,7 +194,7 @@
 
 	root.addEventListener( 'click', function ( event ) {
 		var recheck = event.target.closest( '[data-recheck]' );
-		var filter = event.target.closest( '[data-filter]' );
+		var filter = event.target.closest( 'button[data-filter]' );
 
 		if ( recheck && ! running ) {
 			var id = parseInt( recheck.getAttribute( 'data-recheck' ), 10 );
@@ -181,23 +222,33 @@
 				} );
 		}
 
-		if ( filter && filter.classList.contains( 'lcp-ys-filter__btn' ) ) {
+		var problem = event.target.closest( '[data-problem]' );
+
+		if ( problem ) {
+			var card = root.querySelector( '.lcp-ys-pages' );
+
+			root.setAttribute( 'data-filter', 'code' );
+			root.setAttribute( 'data-code', problem.getAttribute( 'data-problem' ) );
+			root.setAttribute( 'data-code-label', problem.getAttribute( 'data-label' ) || '' );
+			syncFilter();
+
+			if ( card ) {
+				card.scrollIntoView( { behavior: window.matchMedia( '(prefers-reduced-motion: reduce)' ).matches ? 'auto' : 'smooth', block: 'start' } );
+			}
+		}
+
+		if ( filter ) {
 			root.setAttribute( 'data-filter', filter.getAttribute( 'data-filter' ) );
-			root.querySelectorAll( '.lcp-ys-filter__btn' ).forEach( function ( button ) {
-				button.classList.toggle( 'is-active', button === filter );
-			} );
+			root.removeAttribute( 'data-code' );
+			syncFilter();
 		}
 	} );
 
 	var observer = new MutationObserver( function () {
-		var active = root.getAttribute( 'data-filter' );
-
 		updateRecheck();
-
-		root.querySelectorAll( '.lcp-ys-filter__btn' ).forEach( function ( button ) {
-			button.classList.toggle( 'is-active', button.getAttribute( 'data-filter' ) === active );
-		} );
+		syncFilter();
 	} );
 
 	observer.observe( list, { childList: true } );
+	syncFilter();
 }() );

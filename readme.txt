@@ -3,7 +3,7 @@ Tags: seo, schema, sitemap, meta description, open graph
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 0.12.4
+Stable tag: 0.13.0
 
 Per-post SEO controls for titles, descriptions, social tags, canonical URLs and schema, with XML sitemaps. Built to replace Yoast one feature at a time.
 
@@ -33,6 +33,16 @@ After every deploy, run the smoke test against the live site. It checks the site
     LCP_SMOKE_URL=https://example.com LCP_SMOKE_ARCHIVE=/guides/ composer test:smoke
 
 == Changelog ==
+
+= 0.13.0 =
+* New: bulk actions on the Posts, Pages and other list tables. Select items and choose "Yeast SEO: set to noindex" or "Yeast SEO: set to index" from Bulk actions. It sets the same Robots value as the Yeast SEO modal, so sitemaps, the robots meta tag and the Health scan follow it. Items that already have that value are left alone, items you can't edit are skipped, and a notice reports the counts. If the whole site is set to discourage search engines, setting items to index says they will still output noindex.
+
+= 0.12.6 =
+* New: click an entry under "Fix these first" to list just the pages with that problem, with a bar saying what is shown and a button to show all pages again.
+* New: an "Errors" filter beside All, Needs attention and Healthy on the Health tab.
+
+= 0.12.5 =
+* Fix: the Health scan no longer follows a page's redirect to another site. A page that redirects off-site (a Shop page sent to a booking service, for example) is reported as "redirects to ...", with a note that it shouldn't be in the sitemap, instead of failing with a connection or TLS error from the other site. Redirects within the site are still followed.
 
 = 0.12.4 =
 * New: "Re-check pages with errors" on the Health tab runs the scan again for just the pages currently showing errors, such as ones that timed out or were fixed since. The button shows how many, and hides itself when there are none.

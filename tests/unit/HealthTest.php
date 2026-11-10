@@ -484,4 +484,20 @@ class HealthTest extends TestCase {
 
 		unset( $_SERVER['SERVER_ADDR'] );
 	}
+
+	public function test_a_location_header_becomes_an_absolute_url() {
+		$base = 'https://example.test/shop/page/?lcp_health=1';
+
+		$this->assertSame( 'https://other.test/p/1/', lcp_yeast_seo_health_resolve_location( 'https://other.test/p/1/', $base ) );
+		$this->assertSame( 'https://example.test/cart/', lcp_yeast_seo_health_resolve_location( '/cart/', $base ) );
+		$this->assertSame( 'https://elsewhere.test/x', lcp_yeast_seo_health_resolve_location( '//elsewhere.test/x', $base ) );
+		$this->assertSame( 'https://example.test/shop/page/next', lcp_yeast_seo_health_resolve_location( 'next', $base ) );
+		$this->assertSame( '', lcp_yeast_seo_health_resolve_location( '  ', $base ) );
+	}
+
+	public function test_the_scans_cache_buster_is_not_shown_in_a_redirect_target() {
+		$this->assertSame( 'https://example.test/cart/', lcp_yeast_seo_health_strip_scan_arg( 'https://example.test/cart/?lcp_health=123' ) );
+		$this->assertSame( 'https://example.test/cart/?a=1', lcp_yeast_seo_health_strip_scan_arg( 'https://example.test/cart/?lcp_health=123&a=1' ) );
+		$this->assertSame( 'https://example.test/cart/?a=1', lcp_yeast_seo_health_strip_scan_arg( 'https://example.test/cart/?a=1&lcp_health=123' ) );
+	}
 }

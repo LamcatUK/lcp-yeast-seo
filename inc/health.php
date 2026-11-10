@@ -683,6 +683,7 @@ function lcp_yeast_seo_health_hint( $code ) {
 		'faq_incomplete'           => 'Fill in every question and its answer in the FAQ block.',
 		'no_name'                  => 'Add a name to that entity in your Organization JSON-LD under Schema.',
 		'localbusiness_no_address' => 'Add a postal address to the LocalBusiness in your Organization JSON-LD under Schema.',
+		'redirect_offsite'         => 'Mark the page noindex in its Yeast SEO modal to leave it out of the sitemap, or remove the redirect if it is not intended.',
 		'fetch_failed'             => 'The server could not fetch its own page, even through its own address. A firewall, bot protection, basic authentication or a very slow page can cause this. Use Check again, or see the lcp_yeast_seo_health_request_args filter to change the timeout or user agent.',
 		'meta_noindex'             => 'Either remove it from the sitemap by keeping it noindex, or turn noindex off in the page\'s Yeast SEO settings.',
 		'meta_no_title'            => 'Give the page a title in its Yeast SEO modal, or set a title template for its post type under General.',
@@ -830,6 +831,53 @@ function lcp_yeast_seo_health_fetch( $url, array $args ) {
 }
 
 /**
+ * Turns a Location header into an absolute URL.
+ *
+ * @param string $location Header value, absolute or relative.
+ * @param string $base     URL that answered with the redirect.
+ * @return string Absolute URL, or '' when there is nothing usable.
+ */
+function lcp_yeast_seo_health_resolve_location( $location, $base ) {
+	$location = trim( (string) $location );
+
+	if ( '' === $location ) {
+		return '';
+	}
+
+	if ( preg_match( '#^https?://#i', $location ) ) {
+		return $location;
+	}
+
+	$parts = wp_parse_url( $base );
+
+	if ( empty( $parts['host'] ) ) {
+		return '';
+	}
+
+	$origin = ( $parts['scheme'] ?? 'https' ) . '://' . $parts['host'] . ( isset( $parts['port'] ) ? ':' . $parts['port'] : '' );
+
+	if ( 0 === strpos( $location, '//' ) ) {
+		return ( $parts['scheme'] ?? 'https' ) . ':' . $location;
+	}
+
+	if ( '/' === $location[0] ) {
+		return $origin . $location;
+	}
+
+	return $origin . rtrim( dirname( (string) ( $parts['path'] ?? '/' ) . 'x' ), '/' ) . '/' . $location;
+}
+
+/**
+ * Drops the scan's own cache-busting argument from a URL shown to people.
+ *
+ * @param string $url URL.
+ * @return string
+ */
+function lcp_yeast_seo_health_strip_scan_arg( $url ) {
+	return rtrim( (string) preg_replace( '/([?&])lcp_health=\d+&?/', '$1', (string) $url ), '?&' );
+}
+
+/**
  * Fetches a post's public page and checks it.
  *
  * @param int $post_id Post ID.
@@ -845,20 +893,45 @@ function lcp_yeast_seo_health_check_post( $post_id ) {
 		'time'     => time(),
 		'modified' => (string) get_post_field( 'post_modified_gmt', $post_id ),
 	);
-	$response = lcp_yeast_seo_health_fetch(
-		add_query_arg( 'lcp_health', time(), $url ),
-		(array) apply_filters(
-			'lcp_yeast_seo_health_request_args',
-			array(
-				'timeout'     => LCP_YEAST_SEO_HEALTH_PAGE_TIMEOUT,
-				'redirection' => 3,
-				'sslverify'   => apply_filters( 'https_local_ssl_verify', false ), // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- core hook.
-				'user-agent'  => 'Yeast SEO health check',
-				'headers'     => array( 'Cache-Control' => 'no-cache' ),
-			),
-			$post_id
-		)
+	$args      = (array) apply_filters(
+		'lcp_yeast_seo_health_request_args',
+		array(
+			'timeout'     => LCP_YEAST_SEO_HEALTH_PAGE_TIMEOUT,
+			'redirection' => 0,
+			'sslverify'   => apply_filters( 'https_local_ssl_verify', false ), // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- core hook.
+			'user-agent'  => 'Yeast SEO health check',
+			'headers'     => array( 'Cache-Control' => 'no-cache' ),
+		),
+		$post_id
 	);
+	$site_host = (string) wp_parse_url( home_url(), PHP_URL_HOST );
+	$fetch_url = add_query_arg( 'lcp_health', time(), $url );
+	$hops      = 0;
+
+	// Follow redirects within this site by hand, so a page that sends visitors
+	// to another site is reported as that, not fetched from the other site.
+	do {
+		$response = lcp_yeast_seo_health_fetch( $fetch_url, $args );
+		$status   = is_wp_error( $response ) ? 0 : (int) wp_remote_retrieve_response_code( $response );
+		$target   = $status >= 300 && $status < 400 ? lcp_yeast_seo_health_resolve_location( (string) wp_remote_retrieve_header( $response, 'location' ), $fetch_url ) : '';
+
+		if ( '' === $target ) {
+			break;
+		}
+
+		if ( wp_parse_url( $target, PHP_URL_HOST ) !== $site_host ) {
+			$result['issues'][] = array(
+				'level'   => 'warning',
+				'code'    => 'redirect_offsite',
+				'message' => 'This page redirects to ' . lcp_yeast_seo_health_strip_scan_arg( $target ) . ', so it can not be checked. A page that sends visitors elsewhere should not be in your sitemap.',
+			);
+			$result['status']   = 'warning';
+
+			return $result;
+		}
+
+		$fetch_url = $target;
+	} while ( ++$hops <= 3 );
 
 	if ( is_wp_error( $response ) ) {
 		$result['issues'][] = array(
@@ -883,8 +956,8 @@ function lcp_yeast_seo_health_check_post( $post_id ) {
 	}
 
 	$body   = wp_remote_retrieve_body( $response );
-	$result = array_merge( $result, lcp_yeast_seo_health_analyze( $body, (string) wp_parse_url( home_url(), PHP_URL_HOST ) ) );
-	$meta   = lcp_yeast_seo_health_analyze_meta( $body, $url, ! get_option( 'blog_public' ) );
+	$result = array_merge( $result, lcp_yeast_seo_health_analyze( $body, $site_host ) );
+	$meta   = lcp_yeast_seo_health_analyze_meta( $body, $hops ? lcp_yeast_seo_health_strip_scan_arg( $fetch_url ) : $url, ! get_option( 'blog_public' ) );
 
 	$result['issues'] = array_merge( $result['issues'], $meta['issues'] );
 	$result['meta']   = $meta['facts'];

@@ -282,29 +282,37 @@ function lcp_yeast_seo_health_render_list() {
 			<ul class="lcp-ys-problems">
 				<?php foreach ( array_slice( $problems, 0, 8 ) as $problem ) : ?>
 					<li class="lcp-ys-problem lcp-ys-problem--<?php echo esc_attr( $problem['level'] ); ?>">
-						<span class="lcp-ys-problem__text">
-							<?php echo esc_html( $problem['message'] ); ?>
-							<?php if ( '' !== lcp_yeast_seo_health_hint( $problem['code'] ) ) : ?>
-								<span class="lcp-ys-hint"><?php echo esc_html( lcp_yeast_seo_health_hint( $problem['code'] ) ); ?></span>
-							<?php endif; ?>
-						</span>
-						<span class="lcp-ys-problem__count"><?php echo esc_html( lcp_yeast_seo_count_noun( $problem['pages'], 'page' ) ); ?></span>
+						<button type="button" class="lcp-ys-problem__btn" data-problem="<?php echo esc_attr( $problem['code'] ); ?>" data-label="<?php echo esc_attr( $problem['message'] ); ?>" aria-label="<?php echo esc_attr( 'Show the ' . lcp_yeast_seo_count_noun( $problem['pages'], 'page' ) . ' with this problem: ' . $problem['message'] ); ?>">
+							<span class="lcp-ys-problem__text">
+								<?php echo esc_html( $problem['message'] ); ?>
+								<?php if ( '' !== lcp_yeast_seo_health_hint( $problem['code'] ) ) : ?>
+									<span class="lcp-ys-hint"><?php echo esc_html( lcp_yeast_seo_health_hint( $problem['code'] ) ); ?></span>
+								<?php endif; ?>
+							</span>
+							<span class="lcp-ys-problem__count"><?php echo esc_html( lcp_yeast_seo_count_noun( $problem['pages'], 'page' ) ); ?></span>
+						</button>
 					</li>
 				<?php endforeach; ?>
 			</ul>
 		</section>
 	<?php endif; ?>
 
-	<section class="lcp-ys-card">
+	<section class="lcp-ys-card lcp-ys-pages">
 		<div class="lcp-ys-card__head lcp-ys-card__head--row">
 			<h2>Pages</h2>
 			<div class="lcp-ys-filter" role="group" aria-label="Filter pages">
 				<button type="button" class="lcp-ys-filter__btn is-active" data-filter="all">All</button>
 				<button type="button" class="lcp-ys-filter__btn" data-filter="attention">Needs attention</button>
+				<button type="button" class="lcp-ys-filter__btn" data-filter="error">Errors</button>
 				<button type="button" class="lcp-ys-filter__btn" data-filter="ok">Healthy</button>
 			</div>
 		</div>
+		<p class="lcp-ys-filterbar" data-filterbar hidden>
+			<span data-filterbar-text></span>
+			<button type="button" class="button button-small" data-filter="all">Show all pages</button>
+		</p>
 		<div class="lcp-ys-rows">
+			<p class="lcp-ys-empty" data-filter-empty hidden>No pages match this filter.</p>
 			<?php
 			foreach ( $ids as $id ) {
 				lcp_yeast_seo_health_render_row( $id, $results[ $id ] ?? null );
@@ -336,7 +344,7 @@ function lcp_yeast_seo_health_render_row( $post_id, $result ) {
 	$object = get_post_type_object( get_post_type( $post_id ) );
 	$edit   = get_edit_post_link( $post_id, 'raw' );
 	?>
-	<details class="lcp-ys-row" data-status="<?php echo esc_attr( $status ); ?>" data-id="<?php echo (int) $post_id; ?>">
+	<details class="lcp-ys-row" data-status="<?php echo esc_attr( $status ); ?>" data-id="<?php echo (int) $post_id; ?>" data-codes="<?php echo esc_attr( implode( ' ', array_unique( array_column( $issues, 'code' ) ) ) ); ?>">
 		<summary>
 			<span class="lcp-ys-chip lcp-ys-chip--<?php echo esc_attr( $chip[1] ); ?>"><?php echo esc_html( $chip[0] ); ?></span>
 			<span class="lcp-ys-row__title"><?php echo esc_html( wp_strip_all_tags( get_the_title( $post_id ) ) ); ?><span class="lcp-ys-row__type"><?php echo esc_html( $object ? $object->labels->singular_name : '' ); ?></span></span>

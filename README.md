@@ -86,6 +86,10 @@ one feature at a time.
   are flagged. A physical `robots.txt` in the site root is detected, and
   "Take over" copies it into the editor and renames it (kept, timestamped).
   A live check after saving confirms what the site really serves.
+- **Bulk index / noindex**: on any post list table, select items and choose
+  "Yeast SEO: set to noindex" or "set to index" from Bulk actions. It writes
+  the same Robots value as the modal, skips items that already match or that
+  the user cannot edit, and reports the counts.
 - **Editor checks**: the modal quietly notes, under the field, when another
   page uses the same title or description, and when no social image is set.
   Nothing blocks saving.
