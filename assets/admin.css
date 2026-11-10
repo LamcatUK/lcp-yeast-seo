@@ -1640,3 +1640,9 @@
 .lcp-ys-wiz [hidden] {
 	display: none !important;
 }
+
+.lcp-ys-check__name em {
+	color: var(--ys-muted);
+	font-size: 11px;
+	font-style: normal;
+}

@@ -362,7 +362,7 @@ function lcp_yeast_seo_output_sitemap_404() {
 }
 
 /**
- * Taxonomies that get a sitemap: the ones the theme uses, unless their archive is noindex.
+ * Taxonomies that get a sitemap: the ones ticked in the settings and used by the theme, unless their archive is noindex.
  *
  * @return string[] Taxonomy names.
  */
@@ -374,7 +374,7 @@ function lcp_yeast_seo_sitemap_taxonomies() {
 			continue;
 		}
 
-		if ( '1' === lcp_yeast_seo_archive_setting( 'tax:' . $taxonomy, 'noindex', '0' ) || ! lcp_yeast_seo_archive_is_in_use( 'tax:' . $taxonomy ) ) {
+		if ( ! lcp_yeast_seo_sitemap_taxonomy_enabled( $taxonomy ) || '1' === lcp_yeast_seo_archive_setting( 'tax:' . $taxonomy, 'noindex', '0' ) || ! lcp_yeast_seo_archive_is_in_use( 'tax:' . $taxonomy ) ) {
 			continue;
 		}
 

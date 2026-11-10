@@ -125,6 +125,24 @@ class ArchivesTest extends TestCase {
 		$this->assertArrayNotHasKey( 'date', $out, 'an archive left at its defaults is not stored' );
 	}
 
+	public function test_a_taxonomy_is_left_out_of_the_sitemap_until_it_is_ticked() {
+		\Brain\Monkey\Functions\when( 'get_option' )->justReturn( array() );
+		$this->assertFalse( lcp_yeast_seo_sitemap_taxonomy_enabled( 'work_type' ), 'off by default, so an update never adds one' );
+
+		\Brain\Monkey\Functions\when( 'get_option' )->justReturn( array( 'sitemap_taxonomies' => array( 'work_type' => '1', 'category' => '0' ) ) );
+		$this->assertTrue( lcp_yeast_seo_sitemap_taxonomy_enabled( 'work_type' ) );
+		$this->assertFalse( lcp_yeast_seo_sitemap_taxonomy_enabled( 'category' ) );
+		$this->assertFalse( lcp_yeast_seo_sitemap_taxonomy_enabled( 'other' ) );
+	}
+
+	public function test_the_sitemap_taxonomy_choice_keeps_taxonomies_the_form_did_not_list() {
+		\Brain\Monkey\Functions\when( 'get_option' )->justReturn( array( 'sitemap_taxonomies' => array( 'work_type' => '1' ) ) );
+
+		$out = lcp_yeast_seo_sanitize_sitemap_taxonomies( array( 'category' => '1', 'work_type' => '0', 'bad name!' => '1' ) );
+
+		$this->assertSame( array( 'work_type' => '0', 'category' => '1' ), $out );
+	}
+
 	public function test_clearing_an_archive_removes_its_saved_settings() {
 		\Brain\Monkey\Functions\when( 'get_option' )->justReturn( array( 'archives' => array( 'date' => array( 'noindex' => '1', 'title' => '', 'description' => '' ) ) ) );
 		\Brain\Monkey\Functions\when( 'wp_unslash' )->returnArg();

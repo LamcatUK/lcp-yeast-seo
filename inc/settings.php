@@ -66,6 +66,7 @@ function lcp_yeast_seo_sanitize_settings( $input ) {
 		'twitter_site'              => isset( $input['twitter_site'] ) ? sanitize_text_field( wp_unslash( $input['twitter_site'] ) ) : '',
 		'enable_sitemaps'           => empty( $input['enable_sitemaps'] ) ? '0' : '1',
 		'sitemap_post_types'        => lcp_yeast_seo_sanitize_sitemap_post_types( $input['sitemap_post_types'] ?? array() ),
+		'sitemap_taxonomies'        => lcp_yeast_seo_sanitize_sitemap_taxonomies( $input['sitemap_taxonomies'] ?? array() ),
 		'sitemap_images'            => empty( $input['sitemap_images'] ) ? '0' : '1',
 		'auto_schema'               => empty( $input['auto_schema'] ) ? '0' : '1',
 		'auto_schema_kinds'         => lcp_yeast_seo_sanitize_auto_schema_kinds( $input['auto_schema_kinds'] ?? array() ),
@@ -264,6 +265,40 @@ function lcp_yeast_seo_sanitize_title_templates( $input ) {
 	}
 
 	return $out;
+}
+
+/**
+ * Cleans the choice of which taxonomies get a sitemap, keeping the choice for
+ * any taxonomy the form did not list (it only lists those the theme uses).
+ *
+ * @param mixed $input Submitted taxonomy => on/off.
+ * @return string[] Taxonomy => '1' or '0'.
+ */
+function lcp_yeast_seo_sanitize_sitemap_taxonomies( $input ) {
+	$existing = get_option( LCP_YEAST_SEO_SETTINGS_OPTION, array() );
+	$out      = is_array( $existing ) && isset( $existing['sitemap_taxonomies'] ) && is_array( $existing['sitemap_taxonomies'] ) ? $existing['sitemap_taxonomies'] : array();
+
+	foreach ( is_array( $input ) ? $input : array() as $taxonomy => $on ) {
+		if ( preg_match( '/^[a-z0-9_-]+$/', (string) $taxonomy ) ) {
+			$out[ $taxonomy ] = empty( $on ) ? '0' : '1';
+		}
+	}
+
+	return $out;
+}
+
+/**
+ * Whether a taxonomy has been chosen for the sitemap. Off unless ticked, so an update
+ * never adds archive pages to a sitemap by itself.
+ *
+ * @param string $taxonomy Taxonomy name.
+ * @return bool
+ */
+function lcp_yeast_seo_sitemap_taxonomy_enabled( $taxonomy ) {
+	$settings   = get_option( LCP_YEAST_SEO_SETTINGS_OPTION, array() );
+	$taxonomies = isset( $settings['sitemap_taxonomies'] ) && is_array( $settings['sitemap_taxonomies'] ) ? $settings['sitemap_taxonomies'] : array();
+
+	return ! empty( $taxonomies[ $taxonomy ] );
 }
 
 /**
@@ -598,8 +633,16 @@ function lcp_yeast_seo_render_sitemap_post_types_field() {
 				<span class="lcp-ys-check__count"><?php echo (int) ( $count->publish ?? 0 ); ?></span>
 			</label>
 		<?php endforeach; ?>
+		<?php foreach ( array_filter( lcp_yeast_seo_archive_kinds(), static function ( $kind ) { return 'taxonomy' === $kind['type'] && $kind['in_use']; } ) as $kind ) : ?>
+			<label class="lcp-ys-check" title="<?php echo esc_attr( $kind['name'] . ' (archive pages)' ); ?>">
+				<input type="hidden" name="<?php echo esc_attr( LCP_YEAST_SEO_SETTINGS_OPTION ); ?>[sitemap_taxonomies][<?php echo esc_attr( $kind['name'] ); ?>]" value="0">
+				<input type="checkbox" name="<?php echo esc_attr( LCP_YEAST_SEO_SETTINGS_OPTION ); ?>[sitemap_taxonomies][<?php echo esc_attr( $kind['name'] ); ?>]" value="1" <?php checked( lcp_yeast_seo_sitemap_taxonomy_enabled( $kind['name'] ) ); ?>>
+				<span class="lcp-ys-check__name"><?php echo esc_html( $kind['label'] ); ?> <em>archive pages</em></span>
+				<span class="lcp-ys-check__count"><?php echo (int) $kind['count']; ?></span>
+			</label>
+		<?php endforeach; ?>
 	</div>
-	<p class="description">Pages marked noindex are always left out. The number is how many are published. Categories and other archives the theme uses get their own sitemap too, unless you ask search engines not to index them under Archives.</p>
+	<p class="description">Pages marked noindex are always left out. The number is how many are published, or for archive pages how many terms there are. Archive pages (categories and other taxonomies the theme uses) are only in the sitemap if you tick them, and never if you ask search engines not to index them under Archives.</p>
 	<?php
 }
 
