@@ -179,7 +179,7 @@ function lcp_yeast_seo_score_organization( array $node, array $nodes = array(), 
 	$logo  = lcp_yeast_seo_org_list( $node, 'logo', $nodes )[0] ?? null;
 	$earn  = 0;
 	$found = '';
-	$tip   = 'Add your logo. Search engines can show it beside your listing, and it is how they recognise you across the web.';
+	$tip   = 'Add your logo. Search engines can show it beside your listing, and it is how they recognise you across the web. Google needs it at least 112 x 112 pixels; a square 512 x 512 PNG on a transparent or white background is a safe choice. A wide logo works if it is no more than about 3 times wider than tall (for example 600 x 200). Use JPG, PNG, WebP or SVG, and a logo that is readable when small.';
 
 	if ( is_array( $logo ) ) {
 		$logo_url = (string) ( $logo['url'] ?? $logo['contentUrl'] ?? '' );
@@ -189,7 +189,7 @@ function lcp_yeast_seo_score_organization( array $node, array $nodes = array(), 
 
 		if ( '' !== $logo_url && ( ( $w && $h && ( $w < 112 || $h < 112 ) ) ) ) {
 			$earn = 5;
-			$tip  = 'Your logo is smaller than the 112 x 112 pixels Google asks for. Use a larger image.';
+			$tip  = 'Your logo is smaller than the 112 x 112 pixels Google asks for. Use a larger image: 512 x 512 is a safe size.';
 		} elseif ( '' !== $logo_url && $w && $h ) {
 			$earn = 10;
 		} elseif ( '' !== $logo_url ) {
@@ -262,8 +262,16 @@ function lcp_yeast_seo_score_organization( array $node, array $nodes = array(), 
 	}
 
 	// Trust.
-	$add( 'legalname', 'trust', 'Legal name', 2, '' !== lcp_yeast_seo_org_text( $node, 'legalName', $nodes ) ? 2 : 0, lcp_yeast_seo_org_text( $node, 'legalName', $nodes ), 'If your registered company name differs from your trading name, add it as the legal name.' );
-	$add( 'founded', 'trust', 'Founding date', 2, '' !== lcp_yeast_seo_org_text( $node, 'foundingDate', $nodes ) ? 2 : 0, lcp_yeast_seo_org_text( $node, 'foundingDate', $nodes ), 'Add the year you started. It builds trust and is easy to add.' );
+	$add(
+		'founded',
+		'trust',
+		'Founding date',
+		2,
+		'' !== lcp_yeast_seo_org_text( $node, 'foundingDate', $nodes ) ? 2 : 0,
+		lcp_yeast_seo_org_text( $node, 'foundingDate', $nodes ),
+		$raw ? 'Add the year you started. Put it in your Organization JSON-LD, shown below.' : 'Add the year you started in the "Founded" field under Organization schema above (a year such as 2015 is enough).',
+		$form( '', '"foundingDate": "2015"' )
+	);
 
 	$possible = array_sum( array_column( $checks, 'weight' ) );
 	$earned   = array_sum( array_column( $checks, 'earned' ) );

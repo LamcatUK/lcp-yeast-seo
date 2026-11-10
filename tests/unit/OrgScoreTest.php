@@ -153,6 +153,29 @@ class OrgScoreTest extends TestCase {
 		$this->assertStringContainsString( 'ImageObject', $raw['logo']['example'] );
 	}
 
+	public function test_a_legal_name_is_not_scored_because_it_is_often_the_same_as_the_trading_name() {
+		$ids = array_column( lcp_yeast_seo_score_organization( array( '@type' => 'Organization', 'name' => 'X' ) )['checks'], 'id' );
+
+		$this->assertNotContains( 'legalname', $ids );
+	}
+
+	public function test_the_founding_date_tip_says_where_to_add_it() {
+		$raw    = array_column( lcp_yeast_seo_score_organization( array( '@type' => 'Organization', 'name' => 'X' ), array(), 'raw' )['checks'], null, 'id' )['founded'];
+		$fields = array_column( lcp_yeast_seo_score_organization( array( '@type' => 'Organization', 'name' => 'X' ), array(), 'fields' )['checks'], null, 'id' )['founded'];
+
+		$this->assertSame( '"foundingDate": "2015"', $raw['example'] );
+		$this->assertStringContainsString( 'JSON-LD', $raw['tip'] );
+		$this->assertStringContainsString( 'Founded', $fields['tip'] );
+		$this->assertSame( '', $fields['example'] );
+	}
+
+	public function test_the_logo_tip_gives_real_sizes() {
+		$logo = array_column( lcp_yeast_seo_score_organization( array( '@type' => 'Organization', 'name' => 'X' ) )['checks'], null, 'id' )['logo'];
+
+		$this->assertStringContainsString( '112 x 112', $logo['tip'] );
+		$this->assertStringContainsString( '512 x 512', $logo['tip'] );
+	}
+
 	public function test_the_id_should_end_in_organization() {
 		$score = static function ( $id ) {
 			return array_column( lcp_yeast_seo_score_organization( array( '@type' => 'Organization', '@id' => $id ) )['checks'], null, 'id' )['id']['status'];
