@@ -324,6 +324,8 @@ function lcp_yeast_seo_register_settings_page() {
 	add_settings_section( 'lcp_yeast_seo_organization', 'Organization schema', 'lcp_yeast_seo_render_organization_intro', 'lcp-yeast-seo-schema' );
 	add_settings_section( 'lcp_yeast_seo_org_score', 'Organization schema score', 'lcp_yeast_seo_render_org_score_intro', 'lcp-yeast-seo-schema' );
 	add_settings_field( 'org_score', 'Completeness', 'lcp_yeast_seo_render_org_score_field', 'lcp-yeast-seo-schema', 'lcp_yeast_seo_org_score' );
+	add_settings_section( 'lcp_yeast_seo_org_wizard', 'Organization wizard', 'lcp_yeast_seo_render_org_wizard_intro', 'lcp-yeast-seo-schema' );
+	add_settings_field( 'org_wizard', 'Build or improve it', 'lcp_yeast_seo_render_org_wizard_field', 'lcp-yeast-seo-schema', 'lcp_yeast_seo_org_wizard' );
 
 	add_settings_field(
 		'enable_schema',
@@ -481,14 +483,15 @@ function lcp_yeast_seo_render_default_social_image_field() {
  * @param string $url    Current image URL, or ''.
  * @param string $title  Title of the media modal.
  * @param string $button Label of the modal's select button.
+ * @param string $form   ID of the form the value belongs to, when it is not the one it sits in.
  * @return void
  */
-function lcp_yeast_seo_render_image_picker( $name, $url, $title = 'Choose image', $button = 'Use this image' ) {
+function lcp_yeast_seo_render_image_picker( $name, $url, $title = 'Choose image', $button = 'Use this image', $form = '' ) {
 	$url = (string) $url;
 	$id  = '' !== $url ? attachment_url_to_postid( $url ) : 0;
 	?>
 	<div class="lcp-yeast-seo-image" data-image-picker data-image-id="<?php echo (int) $id; ?>" data-title="<?php echo esc_attr( $title ); ?>" data-button="<?php echo esc_attr( $button ); ?>">
-		<input type="hidden" name="<?php echo esc_attr( $name ); ?>" value="<?php echo esc_attr( $url ); ?>" data-image-input>
+		<input type="hidden" name="<?php echo esc_attr( $name ); ?>" value="<?php echo esc_attr( $url ); ?>" <?php echo '' !== $form ? 'form="' . esc_attr( $form ) . '"' : ''; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?> data-image-input>
 		<div class="lcp-yeast-seo-image__preview" data-image-preview><?php echo '' !== $url ? '<img src="' . esc_url( $url ) . '" alt="">' : ''; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped above. ?></div>
 		<button type="button" class="button" data-image-select><?php echo '' !== $url ? 'Change image' : 'Choose image'; ?></button>
 		<button type="button" class="button-link" data-image-remove <?php echo '' !== $url ? '' : 'hidden'; ?>>Remove</button>
@@ -812,6 +815,7 @@ function lcp_yeast_seo_render_settings_page() {
 					<span class="lcp-ys-savebar__hint">Changes on every tab are saved together.</span>
 				</div>
 			</form>
+			<?php lcp_yeast_seo_render_org_wizard_form(); ?>
 			<?php if ( is_file( lcp_yeast_seo_robots_file_path() ) ) : ?>
 				<form id="lcp-yeast-seo-robots-takeover" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 					<input type="hidden" name="action" value="lcp_yeast_seo_robots_takeover">
@@ -835,6 +839,7 @@ function lcp_yeast_seo_settings_assets( $hook ) {
 	}
 
 	lcp_yeast_seo_enqueue_image_picker();
+	lcp_yeast_seo_enqueue_schema_validator();
 	$script_path = LCP_YEAST_SEO_PATH . 'assets/settings.js';
 	wp_enqueue_script( 'lcp-yeast-seo-settings', LCP_YEAST_SEO_URL . 'assets/settings.js', array(), file_exists( $script_path ) ? filemtime( $script_path ) : LCP_YEAST_SEO_VERSION, true );
 }
@@ -876,7 +881,7 @@ function lcp_yeast_seo_render_org_mode_field() {
  */
 function lcp_yeast_seo_render_org_raw_field() {
 	?>
-	<textarea name="<?php echo esc_attr( LCP_YEAST_SEO_SETTINGS_OPTION ); ?>[org_raw]" rows="14" class="large-text code" style="font-family:monospace;" data-org-raw><?php echo esc_textarea( lcp_yeast_seo_get_setting( 'org_raw', '' ) ); ?></textarea>
+	<textarea name="<?php echo esc_attr( LCP_YEAST_SEO_SETTINGS_OPTION ); ?>[org_raw]" rows="14" class="large-text code" style="font-family:monospace;" data-org-raw data-schema-check><?php echo esc_textarea( lcp_yeast_seo_get_setting( 'org_raw', '' ) ); ?></textarea>
 	<p class="description">One JSON object, or an array/@graph of objects, with <code>@context</code> and an <code>@type</code>. Give the Organization an <code>@id</code> ending in <code>#organization</code>. Invalid JSON is not output.</p>
 	<?php
 }

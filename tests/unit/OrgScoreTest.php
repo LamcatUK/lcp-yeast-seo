@@ -131,7 +131,37 @@ class OrgScoreTest extends TestCase {
 		$this->assertSame( 'fail', $score( array() ) );
 		$this->assertSame( 'fail', $score( array( 'not a link', '' ) ) );
 		$this->assertSame( 'partial', $score( array( 'https://facebook.com/x' ) ) );
+		$this->assertSame( 'pass', $score( array( 'https://a.test', 'https://b.test' ) ), 'two real profiles are enough' );
 		$this->assertSame( 'pass', $score( array( 'https://a.test', 'https://b.test', 'https://c.test' ) ) );
+	}
+
+	public function test_a_service_area_business_is_not_marked_down_for_having_no_street_address() {
+		$node = array( '@type' => 'LocalBusiness', 'name' => 'X', 'address' => array( '@type' => 'PostalAddress', 'addressCountry' => 'IM' ), 'areaServed' => array( array( '@type' => 'AdministrativeArea', 'name' => 'Isle of Man' ) ) );
+
+		$result  = lcp_yeast_seo_score_organization( $node );
+		$address = array_column( $result['checks'], null, 'id' )['address'];
+
+		$this->assertSame( 'pass', $address['status'], 'a country is enough' );
+		$this->assertStringContainsString( 'service-area', $address['label'] );
+		$this->assertNotContains( 'geo', array_column( $result['checks'], 'id' ), 'exact coordinates are not expected, and a home address should not be published' );
+	}
+
+	public function test_a_service_area_business_with_no_country_is_told_not_to_publish_a_home_address() {
+		$node = array( '@type' => 'LocalBusiness', 'name' => 'X', 'areaServed' => 'Isle of Man' );
+
+		$address = array_column( lcp_yeast_seo_score_organization( $node )['checks'], null, 'id' )['address'];
+
+		$this->assertSame( 'fail', $address['status'] );
+		$this->assertStringContainsString( 'should not publish a home address', $address['tip'] );
+	}
+
+	public function test_a_business_with_a_street_address_is_still_scored_on_the_full_address_and_position() {
+		$node = array( '@type' => 'LocalBusiness', 'name' => 'X', 'areaServed' => array( 'Douglas' ), 'address' => array( 'streetAddress' => '1 High St', 'addressCountry' => 'IM' ) );
+
+		$result = lcp_yeast_seo_score_organization( $node );
+
+		$this->assertSame( 'partial', array_column( $result['checks'], null, 'id' )['address']['status'] );
+		$this->assertContains( 'geo', array_column( $result['checks'], 'id' ) );
 	}
 
 	public function test_a_telephone_or_email_inside_a_contact_point_counts() {

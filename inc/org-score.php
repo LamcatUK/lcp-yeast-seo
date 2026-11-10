@@ -126,6 +126,10 @@ function lcp_yeast_seo_org_text( array $node, $key, array $nodes = array() ) {
 function lcp_yeast_seo_score_organization( array $node, array $nodes = array(), $mode = 'raw' ) {
 	$nodes  = $nodes ?: array( $node );
 	$local  = lcp_yeast_seo_org_is_local( $node );
+	// A business that serves an area and gives no street address (often run from home) is a
+	// service-area business: it is not expected to publish a street address or exact position.
+	$street = lcp_yeast_seo_org_list( $node, 'address', $nodes )[0] ?? null;
+	$sab    = ! empty( $node['areaServed'] ) && ( ! is_array( $street ) || '' === trim( (string) ( $street['streetAddress'] ?? '' ) ) );
 	$raw    = 'raw' === $mode;
 	$checks = array();
 	$add    = static function ( $id, $group, $label, $weight, $earned, $found, $tip = '', $example = '' ) use ( &$checks ) {
@@ -208,7 +212,7 @@ function lcp_yeast_seo_score_organization( array $node, array $nodes = array(), 
 		return is_string( $link ) && preg_match( '#^https?://#i', $link );
 	} );
 	$count  = count( $same );
-	$add( 'sameas', 'brand', 'Social and directory profiles (sameAs)', 8, $count >= 3 ? 8 : ( $count > 0 ? 4 : 0 ), $count ? lcp_yeast_seo_count_noun( $count, 'profile' ) : '', 'Link the profiles that are really yours: Facebook, LinkedIn, Instagram, your Google Business Profile, Companies House. Three or more helps search engines confirm who you are.' );
+	$add( 'sameas', 'brand', 'Social and directory profiles (sameAs)', 8, $count >= 2 ? 8 : ( $count > 0 ? 4 : 0 ), $count ? lcp_yeast_seo_count_noun( $count, 'profile' ) : '', 'Link the profiles that really are yours: Facebook, LinkedIn, Instagram, your Google Business Profile, and any business directory listing you have. There is no required number; two real ones are enough, and more adds little.' );
 
 	if ( $local ) {
 		$image = lcp_yeast_seo_org_list( $node, 'image', $nodes )[0] ?? null;
@@ -237,19 +241,24 @@ function lcp_yeast_seo_score_organization( array $node, array $nodes = array(), 
 	$add( 'contactpoint', 'contact', 'Contact point', 4, $points ? ( isset( $points[0]['contactType'] ) ? 4 : 2 ) : 0, $points ? lcp_yeast_seo_count_noun( count( $points ), 'contact point' ) : '', 'Add a ContactPoint that says what the number is for (for example "customer service"). It is optional but helps search engines show the right contact.', $form( '', '"contactPoint": { "@type": "ContactPoint", "telephone": "+44 1624 000000", "contactType": "customer service" }' ) );
 
 	$address = lcp_yeast_seo_org_list( $node, 'address', $nodes )[0] ?? null;
-	$parts   = array( 'streetAddress', 'addressLocality', 'postalCode', 'addressCountry' );
+	$parts   = $sab ? array( 'addressCountry' ) : array( 'streetAddress', 'addressLocality', 'postalCode', 'addressCountry' );
 	$have    = is_array( $address ) ? count( array_filter( $parts, static function ( $part ) use ( $address ) {
 		return '' !== trim( (string) ( is_array( $address[ $part ] ?? '' ) ? ( $address[ $part ]['name'] ?? '' ) : ( $address[ $part ] ?? '' ) ) );
 	} ) ) : ( is_string( $address ) && '' !== trim( $address ) ? 1 : 0 );
 	$missing = is_array( $address ) ? array_values( array_diff( $parts, array_filter( $parts, static function ( $part ) use ( $address ) {
 		return '' !== trim( (string) ( is_array( $address[ $part ] ?? '' ) ? ( $address[ $part ]['name'] ?? '' ) : ( $address[ $part ] ?? '' ) ) );
 	} ) ) ) : $parts;
-	$add( 'address', 'contact', 'Postal address', 10, (int) round( 10 * $have / count( $parts ) ), is_array( $address ) ? implode( ', ', array_filter( array( $address['addressLocality'] ?? '', $address['postalCode'] ?? '' ) ) ) : (string) $address, $missing && $have ? 'The address is incomplete. Missing: ' . implode( ', ', $missing ) . '.' : 'Add your full postal address (street, town, postcode, country). It is the basis of local search results.' );
+	$address_tip = $sab
+		? 'Add your country (for example IM or GB). As a business that serves an area, you do not need a street address or postcode, and you should not publish a home address.'
+		: ( $missing && $have ? 'The address is incomplete. Missing: ' . implode( ', ', $missing ) . '.' : 'Add your full postal address (street, town, postcode, country). It is the basis of local search results. If you work from home and travel to customers, add an area served instead and leave the street address out.' );
+	$add( 'address', 'contact', $sab ? 'Address (service-area business)' : 'Postal address', 10, (int) round( 10 * $have / count( $parts ) ), is_array( $address ) ? implode( ', ', array_filter( array( $address['addressLocality'] ?? '', $address['postalCode'] ?? '', $address['addressCountry'] ?? '' ) ) ) : (string) $address, $address_tip );
 
 	// Local details.
 	if ( $local ) {
 		$geo = lcp_yeast_seo_org_list( $node, 'geo', $nodes )[0] ?? null;
+		if ( ! $sab ) {
 		$add( 'geo', 'local', 'Map coordinates', 5, is_array( $geo ) && isset( $geo['latitude'], $geo['longitude'] ) ? 5 : 0, is_array( $geo ) ? trim( ( $geo['latitude'] ?? '' ) . ', ' . ( $geo['longitude'] ?? '' ), ', ' ) : '', 'Add your latitude and longitude so search engines place you on the map exactly.', $form( '', '"geo": { "@type": "GeoCoordinates", "latitude": 54.15, "longitude": -4.48 }' ) );
+		}
 
 		$hours = $node['openingHoursSpecification'] ?? ( $node['openingHours'] ?? null );
 		$add( 'hours', 'local', 'Opening hours', 7, $hours ? 7 : 0, $hours ? 'set' : '', 'Add your opening hours. They appear in local results, and "open now" searches depend on them.', $form( '', '"openingHoursSpecification": [{ "@type": "OpeningHoursSpecification", "dayOfWeek": ["Monday","Tuesday","Wednesday","Thursday","Friday"], "opens": "09:00", "closes": "17:00" }]' ) );

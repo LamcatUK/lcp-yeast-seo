@@ -43,7 +43,7 @@ abstract class TestCase extends PHPUnitTestCase {
 			)
 		);
 
-		foreach ( array( 'settings', 'post-meta', 'templates', 'sitemaps', 'schema', 'auto-schema', 'import-export', 'editor-checks', 'robots', 'health', 'health-content', 'admin-ui', 'bulk-actions', 'archives', 'archive-fields', 'org-score', 'org-qa' ) as $file ) {
+		foreach ( array( 'settings', 'post-meta', 'templates', 'sitemaps', 'schema', 'auto-schema', 'import-export', 'editor-checks', 'robots', 'health', 'health-content', 'admin-ui', 'bulk-actions', 'archives', 'archive-fields', 'org-score', 'org-qa', 'org-wizard' ) as $file ) {
 			require_once LCP_YEAST_SEO_PATH . 'inc/' . $file . '.php';
 		}
 	}

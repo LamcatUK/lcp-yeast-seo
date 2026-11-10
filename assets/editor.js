@@ -190,6 +190,45 @@
     );
   }
 
+  // Live structure check of the JSON-LD, using the shared checker.
+  function SchemaCheck(props) {
+    var checker = window.lcpYeastSeoSchema;
+    var result = checker && props.value ? checker.validate(props.value) : null;
+    var order = { error: 0, warning: 1, info: 2 };
+
+    if (!result || !props.value.trim()) {
+      return null;
+    }
+
+    var kind = result.errors ? "error" : result.warnings ? "warning" : "ok";
+    var summary = result.errors
+      ? result.errors + (result.errors === 1 ? " problem" : " problems") + " to fix" +
+        (result.warnings ? ", and " + result.warnings + (result.warnings === 1 ? " warning" : " warnings") : "") + "."
+      : result.warnings
+        ? "Valid, with " + result.warnings + (result.warnings === 1 ? " warning" : " warnings") + "."
+        : "Looks good" + (result.entities.length ? ": " + result.entities.join(", ") : "") + ".";
+
+    return el(
+      "div",
+      { className: "lcp-schema-check", "aria-live": "polite" },
+      el("p", { className: "lcp-schema-check__summary lcp-schema-check__summary--" + kind }, summary),
+      result.issues.length
+        ? el(
+            "ul",
+            { className: "lcp-schema-check__list" },
+            result.issues
+              .slice()
+              .sort(function (a, b) {
+                return order[a.level] - order[b.level];
+              })
+              .map(function (issue, index) {
+                return el("li", { key: index, className: "lcp-schema-check__item lcp-schema-check__item--" + issue.level }, issue.message);
+              }),
+          )
+        : null,
+    );
+  }
+
   function YeastSeoModal() {
     var modalState = useState(false);
     var isOpen = modalState[0];
@@ -473,6 +512,7 @@
                     rows: 16,
                     className: "lcp-yeast-seo-schema-field",
                   }),
+                  el(SchemaCheck, { value: schema }),
                 ),
               el(
                 PanelBody,

@@ -196,6 +196,7 @@ function lcp_yeast_seo_enqueue_classic_picker( $hook ) {
 
 	if ( $screen && ! empty( $screen->post_type ) && ! lcp_yeast_seo_uses_block_editor( $screen->post_type ) && in_array( $screen->post_type, lcp_yeast_seo_post_types(), true ) ) {
 		lcp_yeast_seo_enqueue_image_picker();
+		lcp_yeast_seo_enqueue_schema_validator();
 	}
 }
 add_action( 'admin_enqueue_scripts', 'lcp_yeast_seo_enqueue_classic_picker' );
@@ -272,7 +273,7 @@ function lcp_yeast_seo_render_meta_box( $post ) {
 		<p>
 			<?php echo esc_html( lcp_yeast_seo_yoast_active() ? __( 'One JSON object, or an array/@graph of objects. Leave blank to use Yoast defaults. Saving with a problem will not be blocked; check for an admin notice after save.', 'lcp-yeast-seo' ) : __( 'One JSON object, or an array/@graph of objects. Saving with a problem will not be blocked; check for an admin notice after save.', 'lcp-yeast-seo' ) ); ?>
 		</p>
-		<textarea id="lcp-yeast-seo-schema-field" name="<?php echo esc_attr( LCP_YEAST_SEO_SCHEMA_META_KEY ); ?>" rows="10" class="widefat" style="font-family:monospace;"><?php echo esc_textarea( $schema ); ?></textarea>
+		<textarea id="lcp-yeast-seo-schema-field" name="<?php echo esc_attr( LCP_YEAST_SEO_SCHEMA_META_KEY ); ?>" rows="10" class="widefat" style="font-family:monospace;" data-schema-check><?php echo esc_textarea( $schema ); ?></textarea>
 	<?php endif; ?>
 	<?php
 }
@@ -331,6 +332,21 @@ function lcp_yeast_seo_save_meta_box( $post_id ) {
 add_action( 'save_post', 'lcp_yeast_seo_save_meta_box' );
 
 /**
+ * Loads the live JSON-LD checker and its styles.
+ *
+ * @return string The script handle, to list as a dependency.
+ */
+function lcp_yeast_seo_enqueue_schema_validator() {
+	$script = LCP_YEAST_SEO_PATH . 'assets/schema-validator.js';
+	$style  = LCP_YEAST_SEO_PATH . 'assets/schema-check.css';
+
+	wp_enqueue_script( 'lcp-yeast-seo-schema-validator', LCP_YEAST_SEO_URL . 'assets/schema-validator.js', array(), file_exists( $script ) ? filemtime( $script ) : LCP_YEAST_SEO_VERSION, true );
+	wp_enqueue_style( 'lcp-yeast-seo-schema-check', LCP_YEAST_SEO_URL . 'assets/schema-check.css', array(), file_exists( $style ) ? filemtime( $style ) : LCP_YEAST_SEO_VERSION );
+
+	return 'lcp-yeast-seo-schema-validator';
+}
+
+/**
  * Loads the block-editor modal assets.
  *
  * @return void
@@ -346,11 +362,12 @@ function lcp_yeast_seo_enqueue_block_editor_assets() {
 	$style_path  = LCP_YEAST_SEO_PATH . 'assets/editor.css';
 
 	wp_enqueue_media();
+	$validator = lcp_yeast_seo_enqueue_schema_validator();
 
 	wp_enqueue_script(
 		'lcp-yeast-seo-editor',
 		LCP_YEAST_SEO_URL . 'assets/editor.js',
-		array( 'wp-api-fetch', 'wp-components', 'wp-data', 'wp-edit-post', 'wp-element', 'wp-i18n', 'wp-plugins' ),
+		array( 'wp-api-fetch', 'wp-components', 'wp-data', 'wp-edit-post', 'wp-element', 'wp-i18n', 'wp-plugins', $validator ),
 		file_exists( $script_path ) ? filemtime( $script_path ) : LCP_YEAST_SEO_VERSION,
 		true
 	);

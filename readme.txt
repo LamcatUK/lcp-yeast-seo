@@ -3,7 +3,7 @@ Tags: seo, schema, sitemap, meta description, open graph
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 0.18.0
+Stable tag: 0.20.0
 
 Per-post SEO controls for titles, descriptions, social tags, canonical URLs and schema, with XML sitemaps. Built to replace Yoast one feature at a time.
 
@@ -33,6 +33,13 @@ After every deploy, run the smoke test against the live site. It checks the site
     LCP_SMOKE_URL=https://example.com LCP_SMOKE_ARCHIVE=/guides/ composer test:smoke
 
 == Changelog ==
+
+= 0.20.0 =
+* New: an Organization wizard on the Schema tab. It works through six steps (business, brand, contact, where you work, hours, review), with every answer prefilled from your current Organization (from the form fields or the pasted JSON-LD), so you change only what you want to. You can change or clear values, tick "I work from home" to drop the street address and map position, and choose to keep, replace or remove the opening hours. The last step previews the JSON-LD and the score before and after, and nothing is saved until you press Save. A saved result goes into the JSON-LD source (carrying your form details across if you used the form fields) and an Undo link restores what you had. Anything you did not change is left exactly as it was, including a logo's size and a contact point's extra details. Enter in a field moves on rather than saving.
+
+= 0.19.0 =
+* New: a live JSON-LD checker under the schema box in the page modal, the classic editor box and the Organization box on the Schema tab. It reports problems as you type, with the line and column for broken JSON: curly quotes, trailing commas, a pasted `<script>` wrapper, single quotes and comments are explained in plain words. It checks the structure, not the whole vocabulary: a missing `@context` or `@type`, misspelt types ("Did you mean LocalBusiness?"), required properties for common types (Service, LocalBusiness, FAQPage, articles, events and more), ids defined twice, references to ids not in the block (advice only), empty values, addresses that aren't full web addresses, unreadable dates and placeholder text.
+* Change: the organisation score no longer penalises a service-area business for having no street address (a country is enough, and map coordinates aren't scored), two profiles are enough for the profiles check, and the legal name is no longer scored.
 
 = 0.18.0 =
 * New: Organization schema score on the Schema tab. It reads your Organization (from the form or the pasted JSON-LD, following references inside a graph), scores it out of 100 across Identity, Brand, Contact, Local details and Trust, lists what is missing with the points each is worth, and gives advice that fits the source you use, with a snippet to paste for JSON-LD. Local-business checks (opening hours, map position, area served, price range) only count for local business types.

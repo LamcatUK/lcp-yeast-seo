@@ -1,20 +1,21 @@
 {
-	"name": "lamcat/lcp-yeast-seo",
-	"description": "Per-post SEO controls for WordPress.",
-	"type": "wordpress-plugin",
-	"license": "proprietary",
-	"require": {
-		"php": ">=7.4"
-	},
-	"require-dev": {
-		"phpunit/phpunit": "^11.5 || ^12.0",
-		"brain/monkey": "^2.6"
-	},
-	"scripts": {
-		"test": "phpunit --testsuite unit",
-		"test:smoke": "phpunit --testsuite smoke"
-	},
-	"config": {
-		"sort-packages": true
-	}
+    "name": "lamcat/lcp-yeast-seo",
+    "description": "Per-post SEO controls for WordPress.",
+    "type": "wordpress-plugin",
+    "license": "proprietary",
+    "require": {
+        "php": ">=7.4"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.5 || ^12.0",
+        "brain/monkey": "^2.6"
+    },
+    "scripts": {
+        "test": "phpunit --testsuite unit",
+        "test:smoke": "phpunit --testsuite smoke",
+        "test:js": "node --test tests/js/schema-validator.test.js"
+    },
+    "config": {
+        "sort-packages": true
+    }
 }
