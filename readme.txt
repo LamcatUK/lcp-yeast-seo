@@ -3,7 +3,7 @@ Tags: seo, schema, sitemap, meta description, open graph
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 0.13.3
+Stable tag: 0.17.0
 
 Per-post SEO controls for titles, descriptions, social tags, canonical URLs and schema, with XML sitemaps. Built to replace Yoast one feature at a time.
 
@@ -33,6 +33,35 @@ After every deploy, run the smoke test against the live site. It checks the site
     LCP_SMOKE_URL=https://example.com LCP_SMOKE_ARCHIVE=/guides/ composer test:smoke
 
 == Changelog ==
+
+= 0.17.0 =
+* New: SEO for category, tag and other taxonomy pages, author pages, date pages, search results and post-type archives. Only the archives the active theme actually uses are offered. A theme counts as using one if its templates link to it (the_category, get_the_term_list, archive and author blocks and so on), it has a template for it, it is in a menu, or the theme has a general archive template; WooCommerce themes use the product taxonomies. The Archives card on the General tab lists what was found and why, tucks the rest into a collapsed section, and has a "Scan the theme again" link. Filter: `lcp_yeast_seo_archive_in_use`.
+* New: per-archive title templates (with `%term%`, `%author%`, `%date%`, `%search%` or `%archive%`, plus `%sitename%`, `%tagline%` and `%sep%`, a live preview, and the page number added on later pages), a noindex choice, and a meta description for post-type archives.
+* New: title, description, noindex / index, canonical and social image fields on term edit screens and on author profiles, shown only for taxonomies and authors the theme uses. Empty fields fall back to the archive settings, then to the term's own description or the author's biography.
+* New: "Ask search engines not to index archives this theme doesn't use", for pages that exist at their addresses but are never linked to. Off by default; recommended.
+* New: taxonomy sitemaps (`category-sitemap.xml` and so on) for the taxonomies the theme uses, listing terms that have posts and are not noindex. Marking an archive noindex removes its sitemap.
+* Archive pages now print a meta description and Open Graph and Twitter tags, like posts do.
+
+= 0.16.1 =
+* New: a separate "Clear data left by another SEO plugin" panel on the Import / Export tab, for when you have migrated what you want and want the rest gone. Choose the plugin (Yoast SEO, Rank Math or SEOPress) and either everything it stored on pages (found by its key prefix, so focus keyphrases and social settings go too) or just the title, description, noindex and canonical. "Download backup (CSV)" gives you every value that would be removed, and removal needs a confirming tick, because it cannot be undone. Yeast SEO's own data can never be matched, and the other plugin's own settings and database tables are not touched. When nothing is left the panel hides.
+* Change: the tick-box that 0.16.0 added to the Migrate form is removed. It only removed values that were already copied, which left anything you chose not to migrate behind.
+
+= 0.15.2 =
+* Change: the results of an import, migration or dry run are redesigned. Each page is its own block with a status chip, one URL, and a line per field showing New, Changes, Matches, Kept, Turned on or Turned off. A change shows the current value and the new one stacked, so you can see exactly what would happen. A summary shows how many would change, are unchanged or were skipped, with filter buttons to look at just one group. Skipped rows show their reason and can still be downloaded to fix and upload again.
+
+= 0.15.1 =
+* Change: import and migration results now compare every value with what the page has now. Each field gets its own line: it matches the current value, is new (nothing there yet), changes from "old" to "new", or is kept because overwriting is off. A value that already matches is no longer rewritten, so those rows show as Unchanged and the dry-run summary counts how many already match or would be kept.
+
+= 0.15.0 =
+* New: migrating from Yoast SEO, Rank Math or SEOPress now also copies each page's noindex setting and canonical URL, not just the title and description. A "Copy" choice lets you pick which. A canonical that only points back at the page itself is skipped. Noindex is only ever added (index is the default), and a page that was saved as "index" still receives it, so a noindex is not lost in the move. The dry run reports both. Nothing is deleted from the other plugin.
+* New: the CSV / XLSX import and export now carry `Noindex` and `Canonical` columns as well as title and description. In the Noindex column, `noindex` (or yes / true / 1) turns noindex on; `index` (or no / false / 0) turns it off, but only when "Overwrite" is ticked. A blank cell leaves the page alone, so a canonical cannot be cleared from a spreadsheet. A canonical that points at the page itself is skipped. The skipped-rows download includes the new columns.
+* Change: the Migrate panel on the Import / Export tab is hidden unless Yoast SEO, Rank Math or SEOPress data is found on the site, and the first source that has data is pre-selected.
+
+= 0.14.0 =
+* Change: the General tab is reorganised and tidied. Settings rows now share one left edge with the card headings, with the label on the left and the control and its help on the right (stacked on a phone). Sections are renamed by what they do: Search listings, Social sharing and XML sitemaps.
+* New: title templates show a live preview of the title they produce, and the tags are buttons that insert themselves at the cursor with spacing. The separator has quick-pick buttons for the common characters.
+* New: sitemap post types are pills showing how many items each contains, the sitemap link sits beside the on/off switch, and the options under a switched-off sitemap dim.
+* No setting names or saved values change; saving the form writes exactly the same options.
 
 = 0.13.3 =
 * Change: the per-page Open Graph and Twitter/X images in the Yeast SEO modal are now picker-first: a preview with Choose / Change image and Remove, instead of a URL box. The classic-editor meta box gets the same media-library picker.

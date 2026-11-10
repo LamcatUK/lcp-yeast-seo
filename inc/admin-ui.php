@@ -24,6 +24,13 @@ function lcp_yeast_seo_admin_ui_assets( $hook ) {
 	wp_enqueue_style( 'lcp-yeast-seo-admin', LCP_YEAST_SEO_URL . 'assets/admin.css', array(), file_exists( $css ) ? filemtime( $css ) : LCP_YEAST_SEO_VERSION );
 
 	// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+	if ( isset( $_GET['tab'] ) && 'import-export' === $_GET['tab'] ) {
+		$js = LCP_YEAST_SEO_PATH . 'assets/import-export.js';
+
+		wp_enqueue_script( 'lcp-yeast-seo-import-export', LCP_YEAST_SEO_URL . 'assets/import-export.js', array(), file_exists( $js ) ? filemtime( $js ) : LCP_YEAST_SEO_VERSION, true );
+	}
+
+	// phpcs:ignore WordPress.Security.NonceVerification.Recommended
 	if ( isset( $_GET['tab'] ) && 'health' === $_GET['tab'] ) {
 		$js = LCP_YEAST_SEO_PATH . 'assets/health.js';
 

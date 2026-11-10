@@ -111,6 +111,163 @@
 		apply();
 	}
 
+	var sepInput = document.querySelector( '[data-sep-input]' );
+	var tplRoot = document.querySelector( '[data-tpl-root]' );
+
+	// Mirrors lcp_yeast_seo_render_title_template() in PHP.
+	var renderTemplate = function ( template, vars ) {
+		var title = template;
+		var sep = vars.sep;
+		var quoted;
+
+		Object.keys( vars ).forEach( function ( tag ) {
+			title = title.split( '%' + tag + '%' ).join( vars[ tag ] );
+		} );
+		title = title.replace( /\s+/g, ' ' ).trim();
+
+		if ( ! sep ) {
+			return title;
+		}
+
+		quoted = sep.replace( /[.*+?^${}()|[\]\\]/g, '\\$&' );
+		title = title.replace( new RegExp( '\\s' + quoted + '(?:\\s' + quoted + ')+\\s', 'g' ), ' ' + sep + ' ' );
+		title = title.replace( new RegExp( '^' + quoted + '\\s+|\\s+' + quoted + '$', 'g' ), '' );
+
+		return title.trim();
+	};
+
+	var archInputs = document.querySelectorAll( '[data-arch-input]' );
+
+	var updateArchPreviews = function () {
+		archInputs.forEach( function ( input ) {
+			var out = input.parentNode.querySelector( '[data-arch-preview]' );
+			var template = input.value.trim();
+			var vars = {
+				sitename: tplRoot ? tplRoot.getAttribute( 'data-site-name' ) : '',
+				tagline: tplRoot ? tplRoot.getAttribute( 'data-tagline' ) : '',
+				sep: sepInput ? sepInput.value : '|'
+			};
+
+			if ( ! out ) {
+				return;
+			}
+
+			vars[ input.getAttribute( 'data-arch-tag' ) ] = input.getAttribute( 'data-arch-sample' );
+			out.textContent = template ? renderTemplate( template, vars ) : '';
+			out.classList.toggle( 'is-empty', ! template );
+		} );
+	};
+
+	var updatePreviews = function () {
+		updateArchPreviews();
+
+		if ( ! tplRoot ) {
+			return;
+		}
+
+		tplRoot.querySelectorAll( '[data-tpl-input]' ).forEach( function ( input ) {
+			var out = input.parentNode.querySelector( '[data-tpl-preview]' );
+			var template = input.value.trim();
+
+			if ( ! out ) {
+				return;
+			}
+
+			out.textContent = template ? renderTemplate( template, {
+				title: tplRoot.getAttribute( 'data-sample' ),
+				sitename: tplRoot.getAttribute( 'data-site-name' ),
+				tagline: tplRoot.getAttribute( 'data-tagline' ),
+				sep: sepInput ? sepInput.value : '|'
+			} ) : 'Not set, so WordPress\'s normal title is used.';
+			out.classList.toggle( 'is-empty', ! template );
+		} );
+	};
+
+	if ( sepInput ) {
+		var syncSepButtons = function () {
+			document.querySelectorAll( '[data-sep]' ).forEach( function ( button ) {
+				button.setAttribute( 'aria-pressed', button.getAttribute( 'data-sep' ) === sepInput.value ? 'true' : 'false' );
+			} );
+		};
+
+		document.querySelectorAll( '[data-sep]' ).forEach( function ( button ) {
+			button.addEventListener( 'click', function () {
+				sepInput.value = button.getAttribute( 'data-sep' );
+				syncSepButtons();
+				updatePreviews();
+			} );
+		} );
+		sepInput.addEventListener( 'input', function () {
+			syncSepButtons();
+			updatePreviews();
+		} );
+	}
+
+	if ( tplRoot ) {
+		var lastTemplate = tplRoot.querySelector( '[data-tpl-input]' );
+
+		tplRoot.addEventListener( 'focusin', function ( event ) {
+			if ( event.target.matches( '[data-tpl-input]' ) ) {
+				lastTemplate = event.target;
+			}
+		} );
+		tplRoot.addEventListener( 'input', updatePreviews );
+		tplRoot.querySelectorAll( '[data-tag]' ).forEach( function ( button ) {
+			button.addEventListener( 'click', function () {
+				var field = lastTemplate;
+				var tag = button.getAttribute( 'data-tag' );
+				var start;
+				var end;
+				var before;
+				var after;
+				var insert;
+
+				if ( ! field ) {
+					return;
+				}
+
+				start = field.selectionStart === null ? field.value.length : field.selectionStart;
+				end = field.selectionEnd === null ? start : field.selectionEnd;
+				before = field.value.slice( 0, start );
+				after = field.value.slice( end );
+				// Space the tag from its neighbours, so a row of clicks reads "%title% %sep% %sitename%".
+				insert = ( before && ! /\s$/.test( before ) ? ' ' : '' ) + tag + ( after && ! /^\s/.test( after ) ? ' ' : '' );
+				field.value = before + insert + after;
+				field.focus();
+				field.setSelectionRange( before.length + insert.length, before.length + insert.length );
+				updatePreviews();
+			} );
+		} );
+		updatePreviews();
+	}
+
+	archInputs.forEach( function ( input ) {
+		input.addEventListener( 'input', updateArchPreviews );
+	} );
+	updateArchPreviews();
+
+	var sitemapsMaster = document.querySelector( '[data-sitemaps-master]' );
+	if ( sitemapsMaster ) {
+		var dependentRows = [];
+
+		document.querySelectorAll( '[name$="[sitemap_images]"], [name*="[sitemap_post_types]"]' ).forEach( function ( input ) {
+			var row = input.closest( 'tr' );
+
+			if ( row && dependentRows.indexOf( row ) === -1 ) {
+				dependentRows.push( row );
+			}
+		} );
+
+		var syncSitemaps = function () {
+			dependentRows.forEach( function ( row ) {
+				row.classList.toggle( 'is-off', ! sitemapsMaster.checked );
+			} );
+		};
+
+		sitemapsMaster.addEventListener( 'change', syncSitemaps );
+		syncSitemaps();
+	}
+
 	var wrap = document.querySelector( '.lcp-yeast-seo-logo' );
 	if ( ! wrap || ! window.wp || ! wp.media ) {
 		return;

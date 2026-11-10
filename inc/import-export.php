@@ -25,21 +25,32 @@ function lcp_yeast_seo_ie_engines() {
 			'label'       => 'Yeast SEO (this plugin)',
 			'title'       => LCP_YEAST_SEO_TITLE_META_KEY,
 			'description' => LCP_YEAST_SEO_DESCRIPTION_META_KEY,
+			'robots'      => LCP_YEAST_SEO_ROBOTS_META_KEY,
+			'canonical'   => LCP_YEAST_SEO_CANONICAL_META_KEY,
 		),
 		'yoast'    => array(
 			'label'       => 'Yoast SEO',
 			'title'       => '_yoast_wpseo_title',
 			'description' => '_yoast_wpseo_metadesc',
+			'robots'      => '_yoast_wpseo_meta-robots-noindex',
+			'canonical'   => '_yoast_wpseo_canonical',
+			'prefix'      => '_yoast_wpseo_',
 		),
 		'rankmath' => array(
 			'label'       => 'Rank Math',
 			'title'       => 'rank_math_title',
 			'description' => 'rank_math_description',
+			'robots'      => 'rank_math_robots',
+			'canonical'   => 'rank_math_canonical_url',
+			'prefix'      => 'rank_math_',
 		),
 		'seopress' => array(
 			'label'       => 'SEOPress',
 			'title'       => '_seopress_titles_title',
 			'description' => '_seopress_titles_desc',
+			'robots'      => '_seopress_robots_index',
+			'canonical'   => '_seopress_robots_canonical',
+			'prefix'      => '_seopress_',
 		),
 	);
 }
@@ -146,6 +157,64 @@ function lcp_yeast_seo_ie_read_post( $post, $engine ) {
 }
 
 /**
+ * Whether another SEO plugin's stored robots value means "noindex".
+ *
+ * Only noindex is carried over: index is this plugin's default, so there is
+ * nothing to copy. Yoast stores 1 for noindex and 2 for a forced index.
+ *
+ * @param string $engine Engine slug.
+ * @param mixed  $raw    Stored meta value.
+ * @return bool
+ */
+function lcp_yeast_seo_ie_is_noindex( $engine, $raw ) {
+	switch ( $engine ) {
+		case 'yeast':
+			return 'noindex' === (string) $raw;
+		case 'yoast':
+			return '1' === (string) $raw;
+		case 'seopress':
+			return 'yes' === (string) $raw;
+		case 'rankmath':
+			return is_array( $raw ) && in_array( 'noindex', $raw, true );
+	}
+
+	return false;
+}
+
+/**
+ * A canonical worth copying: set, and pointing somewhere other than the page itself.
+ *
+ * @param string $url       Stored canonical URL.
+ * @param string $permalink The page's own URL.
+ * @return string The URL, or '' when there is nothing to copy.
+ */
+function lcp_yeast_seo_ie_clean_canonical( $url, $permalink ) {
+	$url = trim( (string) $url );
+
+	if ( '' === $url || untrailingslashit( $url ) === untrailingslashit( (string) $permalink ) ) {
+		return '';
+	}
+
+	return $url;
+}
+
+/**
+ * Noindex and canonical for one post, as another SEO plugin stored them.
+ *
+ * @param WP_Post $post   Post.
+ * @param string  $engine Engine slug.
+ * @return array{noindex:bool,canonical:string}
+ */
+function lcp_yeast_seo_ie_read_extras( $post, $engine ) {
+	$keys = lcp_yeast_seo_ie_engines()[ $engine ];
+
+	return array(
+		'noindex'   => lcp_yeast_seo_ie_is_noindex( $engine, get_post_meta( $post->ID, $keys['robots'], true ) ),
+		'canonical' => lcp_yeast_seo_ie_clean_canonical( (string) get_post_meta( $post->ID, $keys['canonical'], true ), (string) get_permalink( $post ) ),
+	);
+}
+
+/**
  * Lowercases and trims header cells, dropping a leading UTF-8 BOM.
  *
  * @param array $headers Raw header cells.
@@ -171,6 +240,8 @@ function lcp_yeast_seo_ie_map_headers( array $headers ) {
 		'url'              => array( 'url' ),
 		'meta_title'       => array( 'meta title', 'title', 'meta_title' ),
 		'meta_description' => array( 'meta description', 'description', 'meta_description', 'meta desc' ),
+		'noindex'          => array( 'noindex', 'no index', 'robots' ),
+		'canonical'        => array( 'canonical', 'canonical url', 'canonical_url' ),
 	);
 	$mapped  = array();
 
@@ -187,8 +258,8 @@ function lcp_yeast_seo_ie_map_headers( array $headers ) {
 		return new WP_Error( 'lcp_missing_url_header', 'Missing required URL column.' );
 	}
 
-	if ( ! isset( $mapped['meta_title'] ) && ! isset( $mapped['meta_description'] ) ) {
-		return new WP_Error( 'lcp_missing_meta_headers', 'Include at least one Meta Title or Meta Description column.' );
+	if ( ! array_intersect_key( $mapped, array_flip( array( 'meta_title', 'meta_description', 'noindex', 'canonical' ) ) ) ) {
+		return new WP_Error( 'lcp_missing_meta_headers', 'Include at least one Meta Title, Meta Description, Noindex or Canonical column.' );
 	}
 
 	return $mapped;
@@ -204,11 +275,39 @@ function lcp_yeast_seo_ie_map_headers( array $headers ) {
 function lcp_yeast_seo_ie_extract_row( array $mapped, array $row ) {
 	$out = array();
 
-	foreach ( array( 'url', 'meta_title', 'meta_description' ) as $field ) {
+	foreach ( array( 'url', 'meta_title', 'meta_description', 'noindex', 'canonical' ) as $field ) {
 		$out[ $field ] = isset( $mapped[ $field ], $row[ $mapped[ $field ] ] ) ? (string) $row[ $mapped[ $field ] ] : '';
 	}
 
 	return $out;
+}
+
+/**
+ * Reads a Noindex / Robots spreadsheet cell.
+ *
+ * Anything containing "noindex", or a yes/true/1/x, means noindex; a plain
+ * "index" or a no/false/0 means index. A blank or unrecognised cell means "leave
+ * the page alone".
+ *
+ * @param string $cell Cell text.
+ * @return string noindex, index or '' for no instruction.
+ */
+function lcp_yeast_seo_ie_parse_robots_cell( $cell ) {
+	$cell = strtolower( trim( (string) $cell ) );
+
+	if ( '' === $cell ) {
+		return '';
+	}
+
+	if ( false !== strpos( $cell, 'noindex' ) || in_array( $cell, array( 'yes', 'y', 'true', '1', 'x' ), true ) ) {
+		return 'noindex';
+	}
+
+	if ( 0 === strpos( $cell, 'index' ) || in_array( $cell, array( 'no', 'n', 'false', '0' ), true ) ) {
+		return 'index';
+	}
+
+	return '';
 }
 
 /**
@@ -585,9 +684,10 @@ function lcp_yeast_seo_ie_resolve_post( $input ) {
  * @param string $title   Title from the file.
  * @param string $desc    Description from the file.
  * @param string $matched Matched relative URL.
+ * @param array  $extras  Robots (noindex or index) and canonical from the file, and the per-field details.
  * @return array
  */
-function lcp_yeast_seo_ie_result_row( $row, $url, $status, $message, $title = '', $desc = '', $matched = '' ) {
+function lcp_yeast_seo_ie_result_row( $row, $url, $status, $message, $title = '', $desc = '', $matched = '', array $extras = array() ) {
 	return array(
 		'row'              => $row,
 		'url'              => $url,
@@ -596,6 +696,9 @@ function lcp_yeast_seo_ie_result_row( $row, $url, $status, $message, $title = ''
 		'meta_title'       => $title,
 		'meta_description' => $desc,
 		'matched_url'      => $matched,
+		'noindex'          => (string) ( $extras['robots'] ?? '' ),
+		'canonical'        => (string) ( $extras['canonical'] ?? '' ),
+		'details'          => (array) ( $extras['details'] ?? array() ),
 	);
 }
 
@@ -620,7 +723,7 @@ function lcp_yeast_seo_ie_relative_url( $post_id ) {
  * @param array   $counts  Counts by status.
  * @return void
  */
-function lcp_yeast_seo_ie_redirect( $success, $message, array $rows = array(), array $counts = array() ) {
+function lcp_yeast_seo_ie_redirect( $success, $message, array $rows = array(), array $counts = array(), $dry_run = false ) {
 	set_transient(
 		'lcp_yeast_seo_ie_result_' . get_current_user_id(),
 		array(
@@ -628,6 +731,7 @@ function lcp_yeast_seo_ie_redirect( $success, $message, array $rows = array(), a
 			'message' => $message,
 			'rows'    => $rows,
 			'counts'  => $counts,
+			'dry_run' => (bool) $dry_run,
 		),
 		10 * MINUTE_IN_SECONDS
 	);
@@ -637,46 +741,120 @@ function lcp_yeast_seo_ie_redirect( $success, $message, array $rows = array(), a
 }
 
 /**
- * Applies a title and/or description to a post, or reports what it would do.
+ * Shortens a value for display in the results.
+ *
+ * @param string $text Text.
+ * @param int    $max  Maximum characters.
+ * @return string
+ */
+function lcp_yeast_seo_ie_excerpt( $text, $max = 90 ) {
+	return mb_strimwidth( trim( preg_replace( '/\s+/u', ' ', (string) $text ) ), 0, $max, '...' );
+}
+
+/**
+ * Applies a title, description, canonical and/or robots value to a post, or
+ * reports what it would do.
+ *
+ * Each value is compared with what the page has now, and the message says
+ * which it is: matching, new, changing, or kept. A value that matches is not
+ * written again.
+ *
+ * "noindex" is always applied unless the page already has it, including to a
+ * page saved as "index" (which is only the default); a noindex that gets lost
+ * is the costly mistake. "index" can only undo a noindex, and only when
+ * overwriting is allowed. Canonicals follow the same overwrite rule as titles
+ * and descriptions.
  *
  * @param int    $post_id   Post ID.
  * @param string $title     New title ('' to leave alone).
  * @param string $desc      New description ('' to leave alone).
  * @param bool   $dry_run   Only report.
  * @param bool   $overwrite Replace existing values.
- * @return string[] status, message.
+ * @param array  $extras    Optional canonical (string) and robots (noindex or index).
+ * @return array status, message (one line per field) and details (field, state, current and new value for each).
  */
-function lcp_yeast_seo_ie_apply( $post_id, $title, $desc, $dry_run, $overwrite ) {
-	$changes = array();
-	$notes   = array();
+function lcp_yeast_seo_ie_apply( $post_id, $title, $desc, $dry_run, $overwrite, array $extras = array() ) {
+	$lines   = array();
+	$details = array();
 	$writes  = array();
-
-	foreach ( array(
+	$fields  = array(
 		array( LCP_YEAST_SEO_TITLE_META_KEY, $title, 'Title', 'sanitize_text_field' ),
 		array( LCP_YEAST_SEO_DESCRIPTION_META_KEY, $desc, 'Description', 'sanitize_textarea_field' ),
-	) as $field ) {
+		array( LCP_YEAST_SEO_CANONICAL_META_KEY, (string) ( $extras['canonical'] ?? '' ), 'Canonical', 'esc_url_raw' ),
+	);
+
+	foreach ( $fields as $field ) {
 		list( $key, $value, $label, $sanitize ) = $field;
 
 		if ( '' === $value ) {
 			continue;
 		}
 
-		if ( ! $overwrite && '' !== trim( (string) get_post_meta( $post_id, $key, true ) ) ) {
-			$notes[] = $label . ' already set, kept.';
-			continue;
+		$existing = trim( (string) get_post_meta( $post_id, $key, true ) );
+		$clean    = call_user_func( $sanitize, $value );
+		$detail   = array(
+			'field'   => $label,
+			'state'   => 'new',
+			'current' => $existing,
+			'new'     => $clean,
+		);
+
+		if ( $existing === $clean ) {
+			$detail['state'] = 'matches';
+			$lines[]         = $label . ': matches the current value.';
+		} elseif ( ! $overwrite && '' !== $existing ) {
+			$detail['state'] = 'kept';
+			$lines[]         = $label . ': kept "' . lcp_yeast_seo_ie_excerpt( $existing ) . '" (the file has "' . lcp_yeast_seo_ie_excerpt( $value ) . '"; overwriting is off).';
+		} else {
+			$writes[ $key ]  = $clean;
+			$detail['state'] = '' === $existing ? 'new' : 'changes';
+			$lines[]         = '' === $existing
+				? $label . ': new "' . lcp_yeast_seo_ie_excerpt( $value ) . '".'
+				: $label . ': "' . lcp_yeast_seo_ie_excerpt( $existing ) . '" => "' . lcp_yeast_seo_ie_excerpt( $value ) . '".';
+
+			if ( lcp_yeast_seo_ie_has_variables( $value ) ) {
+				$detail['note'] = 'Still contains a template variable.';
+				$lines[]        = $label . ' still contains a template variable.';
+			}
 		}
 
-		$writes[ $key ] = call_user_func( $sanitize, $value );
-		$changes[]      = $label . ' => "' . $value . '"';
+		$details[] = $detail;
+	}
 
-		if ( lcp_yeast_seo_ie_has_variables( $value ) ) {
-			$notes[] = $label . ' still contains a template variable.';
+	$robots = (string) ( $extras['robots'] ?? '' );
+
+	if ( '' !== $robots ) {
+		$was_noindex = 'noindex' === trim( (string) get_post_meta( $post_id, LCP_YEAST_SEO_ROBOTS_META_KEY, true ) );
+		$detail      = array(
+			'field'   => 'Noindex',
+			'state'   => 'matches',
+			'current' => $was_noindex ? 'Noindex' : 'Indexed',
+			'new'     => 'noindex' === $robots ? 'Noindex' : 'Indexed',
+		);
+
+		if ( 'noindex' === $robots && $was_noindex ) {
+			$lines[] = 'Noindex: matches, the page is already noindex.';
+		} elseif ( 'noindex' === $robots ) {
+			$writes[ LCP_YEAST_SEO_ROBOTS_META_KEY ] = 'noindex';
+			$detail['state']                         = 'on';
+			$lines[]                                 = 'Noindex: set (the page is currently indexed).';
+		} elseif ( ! $was_noindex ) {
+			$lines[] = 'Noindex: matches, the page is already indexed.';
+		} elseif ( $overwrite ) {
+			$writes[ LCP_YEAST_SEO_ROBOTS_META_KEY ] = 'index';
+			$detail['state']                         = 'off';
+			$lines[]                                 = 'Noindex: removed (the page is currently noindex).';
+		} else {
+			$detail['state'] = 'kept';
+			$lines[]         = 'Noindex: kept (the file says index; overwriting is off).';
 		}
+
+		$details[] = $detail;
 	}
 
 	if ( ! $writes ) {
 		// Values the page already has are kept on purpose, which isn't a failure to match.
-		return array( $notes ? 'Unchanged' : 'Skipped', implode( ' ', $notes ) ?: 'Nothing to update.' );
+		return array( $lines ? 'Unchanged' : 'Skipped', implode( "\n", $lines ) ?: 'Nothing to update.', $details );
 	}
 
 	if ( ! $dry_run ) {
@@ -687,7 +865,7 @@ function lcp_yeast_seo_ie_apply( $post_id, $title, $desc, $dry_run, $overwrite )
 		clean_post_cache( $post_id );
 	}
 
-	return array( $dry_run ? 'Dry run' : 'Updated', trim( implode( '; ', $changes ) . ' ' . implode( ' ', $notes ) ) );
+	return array( $dry_run ? 'Dry run' : 'Updated', implode( "\n", $lines ), $details );
 }
 
 /**
@@ -725,10 +903,12 @@ function lcp_yeast_seo_ie_handle_import() {
 
 	$update_title = ! empty( $_POST['update_title'] );
 	$update_desc  = ! empty( $_POST['update_description'] );
+	$update_index = ! empty( $_POST['update_noindex'] );
+	$update_canon = ! empty( $_POST['update_canonical'] );
 	$dry_run      = ! empty( $_POST['dry_run'] );
 	$overwrite    = ! empty( $_POST['overwrite'] );
 
-	if ( ! $update_title && ! $update_desc ) {
+	if ( ! $update_title && ! $update_desc && ! $update_index && ! $update_canon ) {
 		lcp_yeast_seo_ie_redirect( false, 'Select at least one field to update.' );
 	}
 
@@ -757,31 +937,39 @@ function lcp_yeast_seo_ie_handle_import() {
 		$url    = trim( $row['url'] );
 		$title  = $update_title ? trim( $row['meta_title'] ) : '';
 		$desc   = $update_desc ? trim( $row['meta_description'] ) : '';
+		$robots = $update_index ? lcp_yeast_seo_ie_parse_robots_cell( $row['noindex'] ) : '';
+		$canon  = $update_canon ? trim( $row['canonical'] ) : '';
 
 		if ( '' === $url ) {
-			$rows[] = lcp_yeast_seo_ie_result_row( $number, $url, 'Skipped', 'Missing URL.', $title, $desc );
+			$rows[] = lcp_yeast_seo_ie_result_row( $number, $url, 'Skipped', 'Missing URL.', $title, $desc, '', array( 'robots' => $robots, 'canonical' => $canon ) );
 			continue;
 		}
 
 		$match = lcp_yeast_seo_ie_resolve_post( $url );
 
 		if ( $match['error'] || ! $match['post_id'] ) {
-			$rows[] = lcp_yeast_seo_ie_result_row( $number, $url, 'Skipped', $match['error'] ?: 'No matching page or post found for this URL.', $title, $desc );
+			$rows[] = lcp_yeast_seo_ie_result_row( $number, $url, 'Skipped', $match['error'] ?: 'No matching page or post found for this URL.', $title, $desc, '', array( 'robots' => $robots, 'canonical' => $canon ) );
 			continue;
 		}
 
-		list( $status, $message ) = lcp_yeast_seo_ie_apply( $match['post_id'], $title, $desc, $dry_run, $overwrite );
+		$extras = array(
+			'robots'    => $robots,
+			'canonical' => lcp_yeast_seo_ie_clean_canonical( $canon, (string) get_permalink( $match['post_id'] ) ),
+		);
 
-		$rows[] = lcp_yeast_seo_ie_result_row( $number, $url, $status, $message, $title, $desc, lcp_yeast_seo_ie_relative_url( $match['post_id'] ) );
+		list( $status, $message, $details ) = lcp_yeast_seo_ie_apply( $match['post_id'], $title, $desc, $dry_run, $overwrite, $extras );
+
+		$rows[] = lcp_yeast_seo_ie_result_row( $number, $url, $status, $message, $title, $desc, lcp_yeast_seo_ie_relative_url( $match['post_id'] ), array( 'robots' => $robots, 'canonical' => $canon, 'details' => $details ) );
 	}
 
 	$counts = lcp_yeast_seo_ie_count_statuses( $rows );
 
 	lcp_yeast_seo_ie_redirect(
 		true,
-		$dry_run ? sprintf( 'Dry run complete. Reviewed %d row(s); %d would change.', count( $rows ), $counts['Dry run'] ) : sprintf( 'Import complete. Updated %d of %d row(s).', $counts['Updated'], count( $rows ) ),
+		$dry_run ? sprintf( 'Dry run complete. Reviewed %d row(s); %d would change, %d already match or would be kept.', count( $rows ), $counts['Dry run'], $counts['Unchanged'] ) : sprintf( 'Import complete. Updated %d of %d row(s).', $counts['Updated'], count( $rows ) ),
 		$rows,
-		$counts
+		$counts,
+		$dry_run
 	);
 }
 add_action( 'admin_post_lcp_yeast_seo_import', 'lcp_yeast_seo_ie_handle_import' );
@@ -840,16 +1028,17 @@ function lcp_yeast_seo_ie_handle_export() {
 
 	foreach ( lcp_yeast_seo_ie_get_posts( $types ) as $post ) {
 		list( $title, $desc ) = lcp_yeast_seo_ie_read_post( $post, $engine );
+		$extras               = lcp_yeast_seo_ie_read_extras( $post, $engine );
 
-		if ( $only && '' === $title && '' === $desc ) {
+		if ( $only && '' === $title && '' === $desc && ! $extras['noindex'] && '' === $extras['canonical'] ) {
 			continue;
 		}
 
-		$lines[] = array( lcp_yeast_seo_ie_relative_url( $post->ID ), $title, $desc );
+		$lines[] = array( lcp_yeast_seo_ie_relative_url( $post->ID ), $title, $desc, $extras['noindex'] ? 'noindex' : '', $extras['canonical'] );
 	}
 
 	if ( ! $lines ) {
-		lcp_yeast_seo_ie_redirect( false, 'No titles or descriptions found to export for the selected post types.' );
+		lcp_yeast_seo_ie_redirect( false, 'No titles, descriptions, noindex or canonical settings found to export for the selected post types.' );
 	}
 
 	nocache_headers();
@@ -857,7 +1046,7 @@ function lcp_yeast_seo_ie_handle_export() {
 	header( 'Content-Disposition: attachment; filename=seo-export-' . gmdate( 'Y-m-d' ) . '.csv' );
 
 	$out = fopen( 'php://output', 'w' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
-	fputcsv( $out, array( 'URL', 'Meta Title', 'Meta Description' ), ',', '"', '\\' );
+	fputcsv( $out, array( 'URL', 'Meta Title', 'Meta Description', 'Noindex', 'Canonical' ), ',', '"', '\\' );
 
 	foreach ( $lines as $line ) {
 		fputcsv( $out, $line, ',', '"', '\\' );
@@ -897,16 +1086,205 @@ function lcp_yeast_seo_ie_handle_export_skipped() {
 	header( 'Content-Disposition: attachment; filename=seo-skipped-' . gmdate( 'Y-m-d' ) . '.csv' );
 
 	$out = fopen( 'php://output', 'w' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
-	fputcsv( $out, array( 'URL', 'Meta Title', 'Meta Description' ), ',', '"', '\\' );
+	fputcsv( $out, array( 'URL', 'Meta Title', 'Meta Description', 'Noindex', 'Canonical' ), ',', '"', '\\' );
 
 	foreach ( $skipped as $row ) {
-		fputcsv( $out, array( $row['url'], $row['meta_title'], $row['meta_description'] ), ',', '"', '\\' );
+		fputcsv( $out, array( $row['url'], $row['meta_title'], $row['meta_description'], $row['noindex'] ?? '', $row['canonical'] ?? '' ), ',', '"', '\\' );
 	}
 
 	fclose( $out ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
 	exit;
 }
 add_action( 'admin_post_lcp_yeast_seo_export_skipped', 'lcp_yeast_seo_ie_handle_export_skipped' );
+
+/**
+ * Which meta keys a "clear" covers for an engine.
+ *
+ * "values" is just the four fields this plugin can import. "all" is every
+ * per-page value the other plugin stored, found by its key prefix.
+ *
+ * @param array  $engine The engine's meta keys, from lcp_yeast_seo_ie_engines().
+ * @param string $scope  values or all.
+ * @return array{keys:string[],prefix:string}
+ */
+function lcp_yeast_seo_ie_legacy_scope( array $engine, $scope ) {
+	if ( 'all' === $scope && ! empty( $engine['prefix'] ) ) {
+		return array(
+			'keys'   => array(),
+			'prefix' => (string) $engine['prefix'],
+		);
+	}
+
+	return array(
+		'keys'   => array_values( array_filter( array( $engine['title'] ?? '', $engine['description'] ?? '', $engine['robots'] ?? '', $engine['canonical'] ?? '' ) ) ),
+		'prefix' => '',
+	);
+}
+
+/**
+ * The SQL condition and its arguments for a clear.
+ *
+ * @param string $engine Engine slug.
+ * @param string $scope  values or all.
+ * @return array{0:string,1:array} Condition on meta_key, and its arguments.
+ */
+function lcp_yeast_seo_ie_legacy_where( $engine, $scope ) {
+	global $wpdb;
+
+	$covered = lcp_yeast_seo_ie_legacy_scope( lcp_yeast_seo_ie_engines()[ $engine ], $scope );
+
+	if ( '' !== $covered['prefix'] ) {
+		return array( 'meta_key LIKE %s', array( $wpdb->esc_like( $covered['prefix'] ) . '%' ) );
+	}
+
+	return array( 'meta_key IN (' . implode( ', ', array_fill( 0, count( $covered['keys'] ), '%s' ) ) . ')', $covered['keys'] );
+}
+
+/**
+ * How many stored values and pages a clear would touch.
+ *
+ * @param string $engine Engine slug.
+ * @param string $scope  values or all.
+ * @return array{values:int,pages:int}
+ */
+function lcp_yeast_seo_ie_count_legacy( $engine, $scope ) {
+	global $wpdb;
+
+	list( $where, $args ) = lcp_yeast_seo_ie_legacy_where( $engine, $scope );
+
+	// phpcs:disable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared
+	$row = $wpdb->get_row( $wpdb->prepare( "SELECT COUNT(*), COUNT(DISTINCT post_id) FROM {$wpdb->postmeta} WHERE {$where}", $args ), ARRAY_N );
+	// phpcs:enable
+
+	return array(
+		'values' => (int) ( $row[0] ?? 0 ),
+		'pages'  => (int) ( $row[1] ?? 0 ),
+	);
+}
+
+/**
+ * Reads the engine and scope of a clear or backup request.
+ *
+ * @return array{0:string,1:string} Engine slug (or '') and scope.
+ */
+function lcp_yeast_seo_ie_posted_legacy() {
+	$engines = lcp_yeast_seo_ie_engines();
+	$engine  = isset( $_POST['engine'] ) ? sanitize_key( wp_unslash( $_POST['engine'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- callers verify the nonce.
+	$scope   = isset( $_POST['scope'] ) && 'values' === $_POST['scope'] ? 'values' : 'all'; // phpcs:ignore WordPress.Security.NonceVerification.Missing
+
+	return array( isset( $engines[ $engine ] ) && 'yeast' !== $engine ? $engine : '', $scope );
+}
+
+/**
+ * Downloads what a clear would remove, as a backup.
+ *
+ * Built from the database on request, so nothing is stored in between.
+ *
+ * @return void
+ */
+function lcp_yeast_seo_ie_handle_export_backup() {
+	global $wpdb;
+
+	if ( ! current_user_can( 'manage_options' ) ) {
+		wp_die( esc_html__( 'You do not have permission to perform this action.', 'lcp-yeast-seo' ) );
+	}
+
+	check_admin_referer( LCP_YEAST_SEO_IE_NONCE );
+
+	list( $engine, $scope ) = lcp_yeast_seo_ie_posted_legacy();
+
+	if ( '' === $engine || ! lcp_yeast_seo_ie_count_legacy( $engine, $scope )['values'] ) {
+		lcp_yeast_seo_ie_redirect( false, 'There is nothing to back up for that choice.' );
+	}
+
+	list( $where, $args ) = lcp_yeast_seo_ie_legacy_where( $engine, $scope );
+
+	nocache_headers();
+	header( 'Content-Type: text/csv; charset=utf-8' );
+	header( 'Content-Disposition: attachment; filename=seo-backup-' . $engine . '-' . gmdate( 'Y-m-d-His' ) . '.csv' );
+
+	$out   = fopen( 'php://output', 'w' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
+	$urls  = array();
+	$after = 0;
+
+	fputcsv( $out, array( 'URL', 'Post ID', 'Meta key', 'Value' ), ',', '"', '\\' );
+
+	do {
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared
+		$chunk = $wpdb->get_results( $wpdb->prepare( "SELECT meta_id, post_id, meta_key, meta_value FROM {$wpdb->postmeta} WHERE {$where} AND meta_id > %d ORDER BY meta_id LIMIT 1000", array_merge( $args, array( $after ) ) ), ARRAY_A );
+		// phpcs:enable
+
+		foreach ( $chunk as $meta ) {
+			$id = (int) $meta['post_id'];
+
+			if ( ! isset( $urls[ $id ] ) ) {
+				$urls[ $id ] = lcp_yeast_seo_ie_relative_url( $id );
+			}
+
+			fputcsv( $out, array( $urls[ $id ], $id, $meta['meta_key'], $meta['meta_value'] ), ',', '"', '\\' );
+			$after = (int) $meta['meta_id'];
+		}
+	} while ( count( $chunk ) === 1000 );
+
+	fclose( $out ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
+	exit;
+}
+add_action( 'admin_post_lcp_yeast_seo_export_backup', 'lcp_yeast_seo_ie_handle_export_backup' );
+
+/**
+ * Removes the values another SEO plugin left on pages.
+ *
+ * @return void
+ */
+function lcp_yeast_seo_ie_handle_clear_legacy() {
+	global $wpdb;
+
+	if ( ! current_user_can( 'manage_options' ) ) {
+		wp_die( esc_html__( 'You do not have permission to perform this action.', 'lcp-yeast-seo' ) );
+	}
+
+	check_admin_referer( LCP_YEAST_SEO_IE_NONCE );
+
+	list( $engine, $scope ) = lcp_yeast_seo_ie_posted_legacy();
+
+	if ( '' === $engine ) {
+		lcp_yeast_seo_ie_redirect( false, 'Choose which plugin to clear.' );
+	}
+
+	if ( empty( $_POST['confirm'] ) ) {
+		lcp_yeast_seo_ie_redirect( false, 'Tick the box to confirm. Removing this data cannot be undone, so download the backup first.' );
+	}
+
+	$counts = lcp_yeast_seo_ie_count_legacy( $engine, $scope );
+	$label  = lcp_yeast_seo_ie_engines()[ $engine ]['label'];
+
+	if ( ! $counts['values'] ) {
+		lcp_yeast_seo_ie_redirect( false, sprintf( 'No %s data was found on pages.', $label ) );
+	}
+
+	list( $where, $args ) = lcp_yeast_seo_ie_legacy_where( $engine, $scope );
+
+	// phpcs:disable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared
+	$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->postmeta} WHERE {$where}", $args ) );
+	// phpcs:enable
+
+	if ( function_exists( 'wp_cache_flush_group' ) ) {
+		wp_cache_flush_group( 'post_meta' );
+	} else {
+		wp_cache_flush();
+	}
+
+	lcp_yeast_seo_ie_redirect(
+		true,
+		sprintf(
+			'Removed %d value(s) on %d page(s) from %s. Its own settings and database tables were not touched.',
+			$counts['values'],
+			$counts['pages'],
+			$label
+		)
+	);
+}
+add_action( 'admin_post_lcp_yeast_seo_clear_legacy', 'lcp_yeast_seo_ie_handle_clear_legacy' );
 
 /**
  * Copies titles and descriptions from another SEO plugin's post meta into this one.
@@ -929,6 +1307,12 @@ function lcp_yeast_seo_ie_handle_migrate() {
 		lcp_yeast_seo_ie_redirect( false, 'Choose an SEO plugin to migrate from.' );
 	}
 
+	$copy = isset( $_POST['copy'] ) ? array_intersect( array_map( 'sanitize_key', (array) wp_unslash( $_POST['copy'] ) ), array( 'text', 'noindex', 'canonical' ) ) : array();
+
+	if ( ! $copy ) {
+		lcp_yeast_seo_ie_redirect( false, 'Choose at least one thing to copy.' );
+	}
+
 	if ( ! $types ) {
 		lcp_yeast_seo_ie_redirect( false, 'Select at least one post type.' );
 	}
@@ -936,15 +1320,20 @@ function lcp_yeast_seo_ie_handle_migrate() {
 	$rows = array();
 
 	foreach ( lcp_yeast_seo_ie_get_posts( $types ) as $post ) {
-		list( $title, $desc ) = lcp_yeast_seo_ie_read_post( $post, $engine );
+		list( $title, $desc ) = in_array( 'text', $copy, true ) ? lcp_yeast_seo_ie_read_post( $post, $engine ) : array( '', '' );
+		$extras               = lcp_yeast_seo_ie_read_extras( $post, $engine );
+		$extras               = array(
+			'robots'    => in_array( 'noindex', $copy, true ) && $extras['noindex'] ? 'noindex' : '',
+			'canonical' => in_array( 'canonical', $copy, true ) ? $extras['canonical'] : '',
+		);
 
-		if ( '' === $title && '' === $desc ) {
+		if ( '' === $title && '' === $desc && '' === $extras['robots'] && '' === $extras['canonical'] ) {
 			continue;
 		}
 
-		list( $status, $message ) = lcp_yeast_seo_ie_apply( $post->ID, $title, $desc, $dry_run, ! empty( $_POST['overwrite'] ) );
+		list( $status, $message, $details ) = lcp_yeast_seo_ie_apply( $post->ID, $title, $desc, $dry_run, ! empty( $_POST['overwrite'] ), $extras );
 
-		$rows[] = lcp_yeast_seo_ie_result_row( count( $rows ) + 1, lcp_yeast_seo_ie_relative_url( $post->ID ), $status, $message, $title, $desc, lcp_yeast_seo_ie_relative_url( $post->ID ) );
+		$rows[] = lcp_yeast_seo_ie_result_row( count( $rows ) + 1, lcp_yeast_seo_ie_relative_url( $post->ID ), $status, $message, $title, $desc, lcp_yeast_seo_ie_relative_url( $post->ID ), array( 'details' => $details ) );
 	}
 
 	$counts = lcp_yeast_seo_ie_count_statuses( $rows );
@@ -956,10 +1345,11 @@ function lcp_yeast_seo_ie_handle_migrate() {
 			$dry_run ? 'Dry run' : 'Migration complete',
 			count( $rows ),
 			$engines[ $engine ]['label'],
-			$dry_run ? sprintf( '%d would change.', $counts['Dry run'] ) : sprintf( '%d updated.', $counts['Updated'] )
+			$dry_run ? sprintf( '%d would change, %d already match or would be kept.', $counts['Dry run'], $counts['Unchanged'] ) : sprintf( '%d updated.', $counts['Updated'] )
 		),
 		$rows,
-		$counts
+		$counts,
+		$dry_run
 	);
 }
 add_action( 'admin_post_lcp_yeast_seo_migrate', 'lcp_yeast_seo_ie_handle_migrate' );
@@ -973,16 +1363,22 @@ add_action( 'admin_post_lcp_yeast_seo_migrate', 'lcp_yeast_seo_ie_handle_migrate
 function lcp_yeast_seo_ie_count_posts_with_data( $engine ) {
 	global $wpdb;
 
-	$keys = lcp_yeast_seo_ie_engines()[ $engine ];
+	$keys   = lcp_yeast_seo_ie_engines()[ $engine ];
+	$robots = array(
+		'yoast'    => array( "meta_value = '1'", array() ),
+		'seopress' => array( "meta_value = 'yes'", array() ),
+		'rankmath' => array( 'meta_value LIKE %s', array( '%' . $wpdb->esc_like( '"noindex"' ) . '%' ) ),
+	);
+	$robots = $robots[ $engine ] ?? array( "meta_value = 'noindex'", array() );
 
-	// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+	// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 	return (int) $wpdb->get_var(
 		$wpdb->prepare(
-			"SELECT COUNT(DISTINCT post_id) FROM {$wpdb->postmeta} WHERE meta_key IN (%s, %s) AND meta_value <> ''",
-			$keys['title'],
-			$keys['description']
+			"SELECT COUNT(DISTINCT post_id) FROM {$wpdb->postmeta} WHERE ( meta_key IN (%s, %s, %s) AND meta_value <> '' ) OR ( meta_key = %s AND {$robots[0]} )",
+			array_merge( array( $keys['title'], $keys['description'], $keys['canonical'], $keys['robots'] ), $robots[1] )
 		)
 	);
+	// phpcs:enable
 }
 
 /**
@@ -1000,7 +1396,117 @@ function lcp_yeast_seo_ie_render_type_checkboxes() {
 }
 
 /**
- * Renders the last operation's outcome.
+ * Chip label and style for a result row's status.
+ *
+ * @param string $status Dry run, Updated, Unchanged or Skipped.
+ * @return string[] Label, chip modifier and filter bucket.
+ */
+function lcp_yeast_seo_ie_status_chip( $status ) {
+	$map = array(
+		'Dry run'   => array( 'Would change', 'warn', 'change' ),
+		'Updated'   => array( 'Updated', 'ok', 'change' ),
+		'Unchanged' => array( 'Unchanged', 'neutral', 'unchanged' ),
+		'Skipped'   => array( 'Skipped', 'error', 'skipped' ),
+	);
+
+	return $map[ $status ] ?? array( $status, 'neutral', 'unchanged' );
+}
+
+/**
+ * Chip label and style for one field's state.
+ *
+ * @param string $state new, changes, matches, kept, on or off.
+ * @return string[] Label and chip modifier.
+ */
+function lcp_yeast_seo_ie_state_chip( $state ) {
+	$map = array(
+		'new'     => array( 'New', 'ok' ),
+		'changes' => array( 'Changes', 'warn' ),
+		'matches' => array( 'Matches', 'neutral' ),
+		'kept'    => array( 'Kept', 'neutral' ),
+		'on'      => array( 'Turned on', 'warn' ),
+		'off'     => array( 'Turned off', 'warn' ),
+	);
+
+	return $map[ $state ] ?? array( $state, 'neutral' );
+}
+
+/**
+ * One value in the results: shortened for reading, in full on hover.
+ *
+ * @param string $text  Value.
+ * @param string $class Modifier: old, new or same.
+ * @param string $label Small caption before the value.
+ * @return void
+ */
+function lcp_yeast_seo_ie_render_value( $text, $class, $label ) {
+	?>
+	<span class="lcp-ys-val lcp-ys-val--<?php echo esc_attr( $class ); ?>" title="<?php echo esc_attr( $text ); ?>"><?php echo '' !== $label ? '<i>' . esc_html( $label ) . '</i> ' : ''; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped above. ?><?php echo esc_html( lcp_yeast_seo_ie_excerpt( $text, 160 ) ); ?></span>
+	<?php
+}
+
+/**
+ * One page's block in the results: its status, URL and what happens to each field.
+ *
+ * @param array $row Result row.
+ * @return void
+ */
+function lcp_yeast_seo_ie_render_result_row( array $row ) {
+	$status  = lcp_yeast_seo_ie_status_chip( $row['status'] );
+	$details = (array) ( $row['details'] ?? array() );
+	?>
+	<article class="lcp-ys-result" data-bucket="<?php echo esc_attr( $status[2] ); ?>">
+		<header class="lcp-ys-result__head">
+			<span class="lcp-ys-chip lcp-ys-chip--<?php echo esc_attr( $status[1] ); ?>"><?php echo esc_html( $status[0] ); ?></span>
+			<span class="lcp-ys-result__url"><?php echo esc_html( '' !== $row['matched_url'] ? $row['matched_url'] : $row['url'] ); ?></span>
+			<?php if ( '' !== $row['matched_url'] && $row['matched_url'] !== $row['url'] ) : ?>
+				<span class="lcp-ys-result__note">from <?php echo esc_html( $row['url'] ); ?></span>
+			<?php endif; ?>
+			<span class="lcp-ys-result__row">Row <?php echo esc_html( (string) $row['row'] ); ?></span>
+		</header>
+		<?php if ( $details ) : ?>
+			<ul class="lcp-ys-fields">
+				<?php foreach ( $details as $detail ) : ?>
+					<?php $chip = lcp_yeast_seo_ie_state_chip( $detail['state'] ); ?>
+					<li class="lcp-ys-field">
+						<span class="lcp-ys-field__name"><?php echo esc_html( $detail['field'] ); ?></span>
+						<span class="lcp-ys-chip lcp-ys-chip--<?php echo esc_attr( $chip[1] ); ?>"><?php echo esc_html( $chip[0] ); ?></span>
+						<span class="lcp-ys-field__vals">
+							<?php
+							switch ( $detail['state'] ) {
+								case 'changes':
+								case 'on':
+								case 'off':
+									lcp_yeast_seo_ie_render_value( $detail['current'], 'old', 'Now' );
+									lcp_yeast_seo_ie_render_value( $detail['new'], 'new', 'To' );
+									break;
+								case 'kept':
+									lcp_yeast_seo_ie_render_value( $detail['current'], 'same', 'Keeping' );
+									lcp_yeast_seo_ie_render_value( $detail['new'], 'old', 'File has' );
+									break;
+								case 'matches':
+									lcp_yeast_seo_ie_render_value( $detail['new'], 'same', '' );
+									break;
+								default:
+									lcp_yeast_seo_ie_render_value( $detail['new'], 'new', '' );
+							}
+							?>
+							<?php if ( ! empty( $detail['note'] ) ) : ?>
+								<span class="lcp-ys-field__warn"><?php echo esc_html( $detail['note'] ); ?></span>
+							<?php endif; ?>
+						</span>
+					</li>
+				<?php endforeach; ?>
+			</ul>
+		<?php else : ?>
+			<p class="lcp-ys-result__reason"><?php echo esc_html( $row['message'] ); ?></p>
+		<?php endif; ?>
+	</article>
+	<?php
+}
+
+/**
+ * Shows the result of the last import or migration, once.
  *
  * @return void
  */
@@ -1012,47 +1518,62 @@ function lcp_yeast_seo_ie_render_result() {
 		return;
 	}
 
-	$counts  = $result['counts'] ?? array();
+	delete_transient( $key );
+
+	$counts = $result['counts'] ?? array();
+	$rows   = $result['rows'] ?? array();
+	$dry    = ! empty( $result['dry_run'] );
+
+	if ( ! $rows ) {
+		?>
+		<div class="notice notice-<?php echo $result['success'] ? 'success' : 'error'; ?>"><p><?php echo esc_html( $result['message'] ); ?></p></div>
+		<?php
+		return;
+	}
+
+	$change  = (int) ( $counts['Dry run'] ?? 0 ) + (int) ( $counts['Updated'] ?? 0 );
+	$same    = (int) ( $counts['Unchanged'] ?? 0 );
 	$skipped = (int) ( $counts['Skipped'] ?? 0 );
-	$rows    = $result['rows'] ?? array();
 	?>
-	<div class="notice notice-<?php echo $result['success'] ? 'success' : 'error'; ?>">
-		<p><?php echo esc_html( $result['message'] ); ?></p>
-		<?php if ( $skipped ) : ?>
-			<p style="color:#d63638;font-weight:600;"><?php echo esc_html( sprintf( '%d row(s) skipped. See the flagged rows below.', $skipped ) ); ?></p>
-		<?php endif; ?>
-	</div>
-	<?php if ( $rows ) : ?>
-		<table class="widefat striped" style="max-width:1200px;margin:1rem 0;">
-			<thead>
-				<tr><th>Row</th><th>Source URL</th><th>Matched URL</th><th>Status</th><th>Details</th></tr>
-			</thead>
-			<tbody>
-				<?php foreach ( array_slice( $rows, 0, LCP_YEAST_SEO_IE_MAX_ROWS_SHOWN ) as $row ) : ?>
-					<tr<?php echo 'Skipped' === $row['status'] ? ' style="background:#fcf0f1;"' : ''; ?>>
-						<td><?php echo esc_html( (string) $row['row'] ); ?></td>
-						<td style="word-break:break-all;"><?php echo esc_html( $row['url'] ); ?></td>
-						<td style="word-break:break-all;"><?php echo '' !== $row['matched_url'] ? esc_html( $row['matched_url'] ) : '&mdash;'; ?></td>
-						<td><?php echo 'Skipped' === $row['status'] ? '<strong style="color:#d63638;">Skipped</strong>' : esc_html( $row['status'] ); ?></td>
-						<td><?php echo esc_html( $row['message'] ); ?></td>
-					</tr>
-				<?php endforeach; ?>
-			</tbody>
-		</table>
+	<section class="lcp-ys-card lcp-ys-results" data-results data-filter="all">
+		<div class="lcp-ys-card__head">
+			<h2><?php echo $dry ? 'Dry run: nothing has been saved' : 'Results'; ?></h2>
+			<div class="lcp-ys-card__intro"><p><?php echo $dry ? 'This is what would happen. To save these changes, untick "Dry run" and run it again.' : esc_html( $result['message'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static text or escaped. ?></p></div>
+		</div>
+		<div class="lcp-ys-results__bar">
+			<ul class="lcp-ys-tally">
+				<li class="lcp-ys-chip lcp-ys-chip--<?php echo $change ? ( $dry ? 'warn' : 'ok' ) : 'neutral'; ?>"><?php echo esc_html( $change . ( $dry ? ' would change' : ' updated' ) ); ?></li>
+				<li class="lcp-ys-chip lcp-ys-chip--neutral"><?php echo esc_html( $same . ' unchanged' ); ?></li>
+				<li class="lcp-ys-chip lcp-ys-chip--<?php echo $skipped ? 'error' : 'neutral'; ?>"><?php echo esc_html( $skipped . ' skipped' ); ?></li>
+			</ul>
+			<div class="lcp-ys-filter" role="group" aria-label="Filter results">
+				<button type="button" class="lcp-ys-filter__btn is-active" data-result-filter="all">All</button>
+				<button type="button" class="lcp-ys-filter__btn" data-result-filter="change"><?php echo $dry ? 'Would change' : 'Updated'; ?></button>
+				<button type="button" class="lcp-ys-filter__btn" data-result-filter="unchanged">Unchanged</button>
+				<button type="button" class="lcp-ys-filter__btn" data-result-filter="skipped">Skipped</button>
+			</div>
+		</div>
+		<div class="lcp-ys-results__list">
+			<?php
+			foreach ( array_slice( $rows, 0, LCP_YEAST_SEO_IE_MAX_ROWS_SHOWN ) as $row ) {
+				lcp_yeast_seo_ie_render_result_row( $row );
+			}
+			?>
+			<p class="lcp-ys-empty" data-result-empty hidden>No rows match this filter.</p>
+		</div>
 		<?php if ( count( $rows ) > LCP_YEAST_SEO_IE_MAX_ROWS_SHOWN ) : ?>
-			<p class="description"><?php echo esc_html( sprintf( 'Showing the first %d of %d rows.', LCP_YEAST_SEO_IE_MAX_ROWS_SHOWN, count( $rows ) ) ); ?></p>
+			<p class="lcp-ys-results__foot"><?php echo esc_html( sprintf( 'Showing the first %d of %d rows.', LCP_YEAST_SEO_IE_MAX_ROWS_SHOWN, count( $rows ) ) ); ?></p>
 		<?php endif; ?>
 		<?php if ( $skipped ) : ?>
-			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<form class="lcp-ys-results__foot" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 				<input type="hidden" name="action" value="lcp_yeast_seo_export_skipped">
 				<?php wp_nonce_field( LCP_YEAST_SEO_IE_NONCE ); ?>
 				<?php submit_button( sprintf( 'Download %d skipped row(s) as CSV', $skipped ), 'secondary', 'submit', false ); ?>
-				<span class="description" style="margin-left:8px;">Fix the URLs and re-upload. Same columns as import.</span>
+				<span class="lcp-ys-savebar__hint">Fix the URLs and upload it again. Same columns as import.</span>
 			</form>
 		<?php endif; ?>
-	<?php endif; ?>
+	</section>
 	<?php
-	delete_transient( $key );
 }
 
 /**
@@ -1063,13 +1584,35 @@ function lcp_yeast_seo_ie_render_result() {
 function lcp_yeast_seo_ie_render_tab() {
 	$engines = lcp_yeast_seo_ie_engines();
 	$default = lcp_yeast_seo_ie_default_engine();
+	$found   = array();
+
+	foreach ( array_keys( $engines ) as $slug ) {
+		if ( 'yeast' !== $slug ) {
+			$found[ $slug ] = lcp_yeast_seo_ie_count_posts_with_data( $slug );
+		}
+	}
+
+	$legacy = array();
+
+	foreach ( array_keys( $found ) as $slug ) {
+		$legacy[ $slug ] = array(
+			'all'    => lcp_yeast_seo_ie_count_legacy( $slug, 'all' ),
+			'values' => lcp_yeast_seo_ie_count_legacy( $slug, 'values' ),
+		);
+	}
+
+	// Pre-select the active plugin if it has data, otherwise the first source that does.
+	$preselect = ! empty( $found[ $default ] ) ? $default : (string) array_key_first( array_filter( $found ) );
+
+	// The same for the clear panel, which also covers data an import would not read.
+	$preselect_legacy = ! empty( $legacy[ $default ]['all']['values'] ) ? $default : (string) array_key_first( array_filter( array_map( static function ( $counts ) { return $counts['all']['values']; }, $legacy ) ) );
 
 	lcp_yeast_seo_ie_render_result();
 	?>
 	<section class="lcp-ys-card">
 		<div class="lcp-ys-card__head">
 			<h2>Export</h2>
-			<div class="lcp-ys-card__intro"><p>Download a CSV of titles and descriptions. It uses the same <code>URL</code>, <code>Meta Title</code> and <code>Meta Description</code> columns as import, with site-relative URLs, so the file works on any copy of the site. Template variables such as <code>%%title%%</code> are filled in.</p></div>
+			<div class="lcp-ys-card__intro"><p>Download a CSV of titles, descriptions, noindex settings and canonical URLs. It uses the same <code>URL</code>, <code>Meta Title</code>, <code>Meta Description</code>, <code>Noindex</code> and <code>Canonical</code> columns as import, with site-relative URLs, so the file works on any copy of the site. Template variables such as <code>%%title%%</code> are filled in.</p></div>
 		</div>
 		<div class="lcp-ys-body">
 	<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
@@ -1103,7 +1646,7 @@ function lcp_yeast_seo_ie_render_tab() {
 	<section class="lcp-ys-card">
 		<div class="lcp-ys-card__head">
 			<h2>Import</h2>
-			<div class="lcp-ys-card__intro"><p>Upload a CSV or XLSX with a header row of <code>URL</code>, <code>Meta Title</code> and/or <code>Meta Description</code>. Rows are matched to pages by URL, and ambiguous matches are skipped rather than guessed.</p></div>
+			<div class="lcp-ys-card__intro"><p>Upload a CSV or XLSX with a header row of <code>URL</code> and any of <code>Meta Title</code>, <code>Meta Description</code>, <code>Noindex</code> and <code>Canonical</code>. Rows are matched to pages by URL, and ambiguous matches are skipped rather than guessed. In the Noindex column, <code>noindex</code> (or yes / true / 1) turns noindex on, and <code>index</code> (or no / false / 0) turns it off when overwriting is allowed. A blank cell leaves the page alone.</p></div>
 		</div>
 		<div class="lcp-ys-body">
 	<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" enctype="multipart/form-data">
@@ -1118,7 +1661,9 @@ function lcp_yeast_seo_ie_render_tab() {
 				<th scope="row">Fields to update</th>
 				<td>
 					<label><input type="checkbox" name="update_title" value="1" checked> Meta Title</label><br>
-					<label><input type="checkbox" name="update_description" value="1" checked> Meta Description</label>
+					<label><input type="checkbox" name="update_description" value="1" checked> Meta Description</label><br>
+					<label><input type="checkbox" name="update_noindex" value="1" checked> Noindex</label><br>
+					<label><input type="checkbox" name="update_canonical" value="1" checked> Canonical</label>
 				</td>
 			</tr>
 			<tr>
@@ -1134,10 +1679,11 @@ function lcp_yeast_seo_ie_render_tab() {
 		</div>
 	</section>
 
+	<?php if ( array_sum( $found ) > 0 ) : ?>
 	<section class="lcp-ys-card">
 		<div class="lcp-ys-card__head">
 			<h2>Migrate from another SEO plugin</h2>
-			<div class="lcp-ys-card__intro"><p>Copies titles and descriptions straight from another plugin's data on this site, with its template variables filled in. Nothing is deleted from the other plugin.</p></div>
+			<div class="lcp-ys-card__intro"><p>Copies titles, descriptions, noindex settings and canonical URLs straight from another plugin's data on this site, with template variables filled in. Nothing is deleted from the other plugin.</p></div>
 		</div>
 		<div class="lcp-ys-body">
 	<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
@@ -1152,14 +1698,22 @@ function lcp_yeast_seo_ie_render_tab() {
 						if ( 'yeast' === $slug ) {
 							continue;
 						}
-						$found = lcp_yeast_seo_ie_count_posts_with_data( $slug );
+						$count = $found[ $slug ];
 						?>
 						<label style="display:block;margin-bottom:4px;">
-							<input type="radio" name="engine" value="<?php echo esc_attr( $slug ); ?>" <?php checked( $slug, $default ); ?> <?php disabled( 0 === $found ); ?>>
+							<input type="radio" name="engine" value="<?php echo esc_attr( $slug ); ?>" <?php checked( $slug, $preselect ); ?> <?php disabled( 0 === $count ); ?>>
 							<?php echo esc_html( $engine['label'] ); ?>
-							<span class="description">&mdash; <?php echo esc_html( $found ? sprintf( '%d page(s) with data', $found ) : 'no data found' ); ?></span>
+							<span class="description">&mdash; <?php echo esc_html( $count ? sprintf( '%d page(s) with data', $count ) : 'no data found' ); ?></span>
 						</label>
 					<?php endforeach; ?>
+				</td>
+			</tr>
+			<tr>
+				<th scope="row">Copy</th>
+				<td>
+					<label><input type="checkbox" name="copy[]" value="text" checked> Titles and descriptions</label><br>
+					<label><input type="checkbox" name="copy[]" value="noindex" checked> Noindex settings</label><br>
+					<label><input type="checkbox" name="copy[]" value="canonical" checked> Canonical URLs <span class="description">(only ones that point away from the page itself)</span></label>
 				</td>
 			</tr>
 			<tr>
@@ -1169,7 +1723,7 @@ function lcp_yeast_seo_ie_render_tab() {
 			<tr>
 				<th scope="row">Options</th>
 				<td>
-					<label><input type="checkbox" name="overwrite" value="1"> Overwrite values a page already has</label><br>
+					<label><input type="checkbox" name="overwrite" value="1"> Overwrite titles, descriptions and canonicals a page already has</label><br>
 					<label><input type="checkbox" name="dry_run" value="1" checked> Dry run: show what would change without saving</label>
 				</td>
 			</tr>
@@ -1178,5 +1732,49 @@ function lcp_yeast_seo_ie_render_tab() {
 	</form>
 		</div>
 	</section>
+	<?php endif; ?>
+
+	<?php if ( array_sum( array_map( static function ( $counts ) { return $counts['all']['values']; }, $legacy ) ) > 0 ) : ?>
+	<section class="lcp-ys-card">
+		<div class="lcp-ys-card__head">
+			<h2>Clear data left by another SEO plugin</h2>
+			<div class="lcp-ys-card__intro"><p>When you have migrated what you want, remove what the other plugin stored on your pages, so none of it lingers. This is separate from migrating, and it cannot be undone, so download the backup first. The plugin's own settings and database tables are not touched. When nothing is left, this panel disappears.</p></div>
+		</div>
+		<div class="lcp-ys-body">
+	<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+		<?php wp_nonce_field( LCP_YEAST_SEO_IE_NONCE ); ?>
+		<table class="form-table" role="presentation">
+			<tr>
+				<th scope="row">Clear data from</th>
+				<td>
+					<?php foreach ( $legacy as $slug => $counts ) : ?>
+						<label style="display:block;margin-bottom:4px;">
+							<input type="radio" name="engine" value="<?php echo esc_attr( $slug ); ?>" <?php checked( $slug, $preselect_legacy ); ?> <?php disabled( 0 === $counts['all']['values'] ); ?>>
+							<?php echo esc_html( $engines[ $slug ]['label'] ); ?>
+							<span class="description">&mdash; <?php echo esc_html( $counts['all']['values'] ? sprintf( '%d value(s) on %d page(s); %d of them are a title, description, noindex or canonical', $counts['all']['values'], $counts['all']['pages'], $counts['values']['values'] ) : 'nothing found' ); ?></span>
+						</label>
+					<?php endforeach; ?>
+				</td>
+			</tr>
+			<tr>
+				<th scope="row">What to remove</th>
+				<td>
+					<label style="display:block;margin-bottom:4px;"><input type="radio" name="scope" value="all" checked> Everything it stored on pages <span class="description">&mdash; including focus keyphrases, social settings and the rest</span></label>
+					<label style="display:block;"><input type="radio" name="scope" value="values"> Only the title, description, noindex and canonical</label>
+				</td>
+			</tr>
+			<tr>
+				<th scope="row">Confirm</th>
+				<td><label><input type="checkbox" name="confirm" value="1" required> I have downloaded the backup and understand this cannot be undone</label></td>
+			</tr>
+		</table>
+		<p class="submit">
+			<button type="submit" class="button" name="action" value="lcp_yeast_seo_export_backup" formnovalidate>Download backup (CSV)</button>
+			<button type="submit" class="button button-primary lcp-ys-danger" name="action" value="lcp_yeast_seo_clear_legacy">Remove the data</button>
+		</p>
+	</form>
+		</div>
+	</section>
+	<?php endif; ?>
 	<?php
 }

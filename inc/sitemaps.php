@@ -362,6 +362,141 @@ function lcp_yeast_seo_output_sitemap_404() {
 }
 
 /**
+ * Taxonomies that get a sitemap: the ones the theme uses, unless their archive is noindex.
+ *
+ * @return string[] Taxonomy names.
+ */
+function lcp_yeast_seo_sitemap_taxonomies() {
+	$names = array();
+
+	foreach ( get_taxonomies( array( 'public' => true, 'publicly_queryable' => true ) ) as $taxonomy ) {
+		if ( 'post_format' === $taxonomy || post_type_exists( $taxonomy ) ) {
+			continue;
+		}
+
+		if ( '1' === lcp_yeast_seo_archive_setting( 'tax:' . $taxonomy, 'noindex', '0' ) || ! lcp_yeast_seo_archive_is_in_use( 'tax:' . $taxonomy ) ) {
+			continue;
+		}
+
+		$names[] = $taxonomy;
+	}
+
+	return $names;
+}
+
+/**
+ * Terms of a taxonomy that belong in its sitemap: they have posts, and are not set to noindex.
+ *
+ * @param string $taxonomy Taxonomy name.
+ * @return int[]
+ */
+function lcp_yeast_seo_sitemap_term_ids( $taxonomy ) {
+	$ids = get_terms(
+		array(
+			'taxonomy'   => $taxonomy,
+			'hide_empty' => true,
+			'fields'     => 'ids',
+			'orderby'    => 'id',
+		)
+	);
+
+	if ( is_wp_error( $ids ) ) {
+		return array();
+	}
+
+	return array_values(
+		array_filter(
+			array_map( 'intval', $ids ),
+			static function ( $term_id ) {
+				return 'noindex' !== get_term_meta( $term_id, LCP_YEAST_SEO_ROBOTS_META_KEY, true );
+			}
+		)
+	);
+}
+
+/**
+ * When a taxonomy's pages last changed: its most recently edited post.
+ *
+ * @param string $taxonomy Taxonomy name.
+ * @return string W3C date, or '' when it has no posts.
+ */
+function lcp_yeast_seo_sitemap_taxonomy_lastmod( $taxonomy ) {
+	$posts = get_posts(
+		array(
+			'post_type'      => 'any',
+			'posts_per_page' => 1,
+			'orderby'        => 'modified',
+			'order'          => 'DESC',
+			'fields'         => 'ids',
+			'no_found_rows'  => true,
+			'tax_query'      => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_tax_query
+				array(
+					'taxonomy' => $taxonomy,
+					'operator' => 'EXISTS',
+				),
+			),
+		)
+	);
+
+	return $posts ? (string) get_post_modified_time( DATE_W3C, true, $posts[0] ) : '';
+}
+
+/**
+ * Renders one taxonomy sitemap page.
+ *
+ * @param string $taxonomy Taxonomy name.
+ * @param int    $page     Page number.
+ * @return void
+ */
+function lcp_yeast_seo_render_taxonomy_sitemap( $taxonomy, $page ) {
+	$page   = max( 1, absint( $page ) );
+	$chunks = array_chunk( lcp_yeast_seo_sitemap_term_ids( $taxonomy ), LCP_YEAST_SEO_SITEMAP_PAGE_SIZE );
+
+	if ( empty( $chunks[ $page - 1 ] ) ) {
+		lcp_yeast_seo_output_sitemap_404();
+	}
+
+	$urls = array();
+
+	foreach ( $chunks[ $page - 1 ] as $term_id ) {
+		$link = get_term_link( $term_id, $taxonomy );
+
+		if ( ! is_wp_error( $link ) ) {
+			$urls[] = $link;
+		}
+	}
+
+	if ( lcp_yeast_seo_request_wants_html() ) {
+		$object = get_taxonomy( $taxonomy );
+
+		lcp_yeast_seo_output_sitemap_html(
+			'urlset',
+			array_map(
+				static function ( $url ) {
+					return array(
+						'loc'     => $url,
+						'lastmod' => '',
+					);
+				},
+				$urls
+			),
+			$object ? $object->labels->name : $taxonomy
+		);
+	}
+
+	$xml  = '<?xml version="1.0" encoding="' . esc_attr( get_bloginfo( 'charset' ) ) . '"?>';
+	$xml .= '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">';
+
+	foreach ( $urls as $url ) {
+		$xml .= '<url><loc>' . esc_url( $url ) . '</loc></url>';
+	}
+
+	$xml .= '</urlset>';
+
+	lcp_yeast_seo_output_xml( $xml );
+}
+
+/**
  * Renders the sitemap index.
  *
  * @return void
@@ -390,6 +525,18 @@ function lcp_yeast_seo_render_sitemap_index() {
 		}
 	}
 
+	foreach ( lcp_yeast_seo_sitemap_taxonomies() as $taxonomy ) {
+		$total = count( lcp_yeast_seo_sitemap_term_ids( $taxonomy ) );
+
+		for ( $page = 1; $page <= (int) ceil( $total / LCP_YEAST_SEO_SITEMAP_PAGE_SIZE ); $page++ ) {
+			$items[] = array(
+				'loc'     => lcp_yeast_seo_sitemap_url( $taxonomy, $page ),
+				'lastmod' => lcp_yeast_seo_sitemap_taxonomy_lastmod( $taxonomy ),
+				'count'   => min( LCP_YEAST_SEO_SITEMAP_PAGE_SIZE, $total - ( $page - 1 ) * LCP_YEAST_SEO_SITEMAP_PAGE_SIZE ),
+			);
+		}
+	}
+
 	if ( lcp_yeast_seo_request_wants_html() ) {
 		lcp_yeast_seo_output_sitemap_html( 'index', $items );
 	}
@@ -400,7 +547,7 @@ function lcp_yeast_seo_render_sitemap_index() {
 	foreach ( $items as $item ) {
 		$xml .= '<sitemap>';
 		$xml .= '<loc>' . esc_url( $item['loc'] ) . '</loc>';
-		$xml .= '<lastmod>' . esc_html( $item['lastmod'] ) . '</lastmod>';
+		$xml .= '' !== (string) $item['lastmod'] ? '<lastmod>' . esc_html( $item['lastmod'] ) . '</lastmod>' : '';
 		$xml .= '</sitemap>';
 	}
 
@@ -418,6 +565,10 @@ function lcp_yeast_seo_render_sitemap_index() {
  */
 function lcp_yeast_seo_render_post_type_sitemap( $post_type, $page ) {
 	if ( ! in_array( $post_type, lcp_yeast_seo_sitemap_post_types(), true ) ) {
+		if ( in_array( $post_type, lcp_yeast_seo_sitemap_taxonomies(), true ) ) {
+			lcp_yeast_seo_render_taxonomy_sitemap( $post_type, $page );
+		}
+
 		lcp_yeast_seo_output_sitemap_404();
 	}
 

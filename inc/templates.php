@@ -168,13 +168,17 @@ function lcp_yeast_seo_auto_description( $post_id ) {
 function lcp_yeast_seo_effective_description() {
 	$description = lcp_yeast_seo_current_description();
 
-	if ( '' !== $description || lcp_yeast_seo_yoast_active() || ! lcp_yeast_seo_auto_description_enabled() ) {
+	if ( '' !== $description || lcp_yeast_seo_yoast_active() ) {
 		return $description;
 	}
 
 	$post_id = lcp_yeast_seo_current_post_id();
 
-	return $post_id ? lcp_yeast_seo_auto_description( $post_id ) : '';
+	if ( $post_id ) {
+		return lcp_yeast_seo_auto_description_enabled() ? lcp_yeast_seo_auto_description( $post_id ) : '';
+	}
+
+	return lcp_yeast_seo_archive_description();
 }
 
 /**

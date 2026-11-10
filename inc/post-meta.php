@@ -432,7 +432,15 @@ function lcp_yeast_seo_current_post_id() {
  */
 function lcp_yeast_seo_current_meta( $meta_key ) {
 	$post_id = lcp_yeast_seo_current_post_id();
-	return $post_id ? (string) get_post_meta( $post_id, $meta_key, true ) : '';
+
+	if ( $post_id ) {
+		return (string) get_post_meta( $post_id, $meta_key, true );
+	}
+
+	// Term and author archives keep the same fields on the term or the user.
+	$archive = lcp_yeast_seo_current_archive();
+
+	return $archive ? lcp_yeast_seo_archive_meta( $archive, $meta_key ) : '';
 }
 
 /**
@@ -660,7 +668,7 @@ function lcp_yeast_seo_should_index_current_page() {
 	}
 
 	if ( ! lcp_yeast_seo_is_managed_view() ) {
-		return true;
+		return 'noindex' !== lcp_yeast_seo_archive_robots();
 	}
 
 	return 'noindex' !== lcp_yeast_seo_current_meta( LCP_YEAST_SEO_ROBOTS_META_KEY );
@@ -672,7 +680,7 @@ function lcp_yeast_seo_should_index_current_page() {
  * @return bool
  */
 function lcp_yeast_seo_should_override_robots() {
-	return ! get_option( 'blog_public' ) || lcp_yeast_seo_is_managed_view();
+	return ! get_option( 'blog_public' ) || lcp_yeast_seo_is_managed_view() || '' !== lcp_yeast_seo_archive_robots();
 }
 
 /**

@@ -46,6 +46,7 @@ one feature at a time.
   (`image:image`) for each page's lead and content images. Sitemap URLs are
   served without a trailing slash, and the index is added to the virtual
   `robots.txt`.
+- **General tab**: Search listings, Social sharing and XML sitemaps, each a card with the label on the left and the control on the right. Title templates show a live preview of the title they produce, with one-click tag buttons and separator quick-picks.
 - **Title templates**: a per-post-type pattern such as
   `%title% %sep% %sitename%` (tags `%title%`, `%sitename%`, `%tagline%`,
   `%sep%`) used where a page has no title of its own. Empty means
@@ -64,7 +65,8 @@ one feature at a time.
   `lcp_yeast_seo_auto_schema_article_types` maps post types to Article types
   (posts are `BlogPosting` by default). Posts can be credited to the post's
   author or to the site as an Organization (Schema tab).
-- **Import / Export tab**: CSV or XLSX import of titles and descriptions by
+- **Migration** (Import / Export tab, shown only when Yoast, Rank Math or SEOPress data is found): copies titles, descriptions, noindex settings and canonical URLs, with a choice of what to copy, a dry run by default, and nothing deleted from the other plugin.
+- **Import / Export tab** (CSV and XLSX also carry `Noindex` and `Canonical` columns): CSV or XLSX import of titles and descriptions by
   URL (with dry run), CSV export from Yeast, Yoast, Rank Math or SEOPress
   with their template variables resolved, and direct migration from those
   plugins. The CSV format (`URL`, `Meta Title`, `Meta Description`) matches
@@ -86,6 +88,12 @@ one feature at a time.
   are flagged. A physical `robots.txt` in the site root is detected, and
   "Take over" copies it into the editor and renames it (kept, timestamped).
   A live check after saving confirms what the site really serves.
+- **Archive SEO**: category, tag, taxonomy, author, date, search and post-type
+  archive pages get title templates, noindex choices, meta descriptions, social
+  tags and sitemaps. Per-term and per-author fields exist too. Only the archives
+  the active theme uses (it links to them, has a template for them, or has them in
+  a menu) are offered, and the rest are tucked away; a setting can noindex the
+  ones it does not use.
 - **Bulk index / noindex**: on any post list table, select items and choose
   "Yeast SEO: set to noindex" or "set to index" from Bulk actions. It writes
   the same Robots value as the modal, skips items that already match or that
