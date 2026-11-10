@@ -1,0 +1,16 @@
+.lcp-yeast-seo-image__preview:empty {
+	display: none;
+}
+
+.lcp-yeast-seo-image__preview img {
+	display: block;
+	max-width: 320px;
+	height: auto;
+	margin: 0 0 10px;
+	border: 1px solid #dcdcde;
+	border-radius: 6px;
+}
+
+.lcp-yeast-seo-image .button-link {
+	margin-left: 8px;
+}

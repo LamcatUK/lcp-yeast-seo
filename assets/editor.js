@@ -134,15 +134,31 @@
   }
 
   function ImageField(props) {
+    var shown = props.value || props.fallbackUrl || "";
+    var usingFallback = !props.value && !!props.fallbackUrl;
+
     return el(
-      "div",
-      { className: "lcp-yeast-seo-image-field" },
-      el(TextControl, {
+      wp.components.BaseControl,
+      {
         label: props.label,
-        value: props.value,
-        onChange: props.onChange,
         help: props.help,
-      }),
+        className: "lcp-yeast-seo-image-field",
+        __nextHasNoMarginBottom: true,
+      },
+      shown &&
+        el("img", {
+          className:
+            "lcp-yeast-seo-image-preview" +
+            (usingFallback ? " lcp-yeast-seo-image-preview--fallback" : ""),
+          src: shown,
+          alt: "",
+        }),
+      usingFallback &&
+        el(
+          "p",
+          { className: "lcp-yeast-seo-note lcp-yeast-seo-note--muted" },
+          props.fallbackLabel,
+        ),
       el(
         "div",
         { className: "lcp-yeast-seo-image-actions" },
@@ -154,26 +170,23 @@
               openMediaFrame(props.onChange);
             },
           },
-          __("Choose image", "lcp-yeast-seo"),
+          props.value
+            ? __("Change image", "lcp-yeast-seo")
+            : __("Choose image", "lcp-yeast-seo"),
         ),
         props.value &&
           el(
             Button,
             {
               variant: "tertiary",
+              isDestructive: true,
               onClick: function () {
                 props.onChange("");
               },
             },
-            __("Clear", "lcp-yeast-seo"),
+            __("Remove", "lcp-yeast-seo"),
           ),
       ),
-      props.value &&
-        el("img", {
-          className: "lcp-yeast-seo-image-preview",
-          src: props.value,
-          alt: "",
-        }),
     );
   }
 
@@ -191,6 +204,8 @@
     var postData = useSelect(function (select) {
       var editor = select("core/editor");
       var currentPost = editor.getCurrentPost();
+      var featuredId = editor.getEditedPostAttribute("featured_media") || 0;
+      var featured = featuredId ? select("core").getMedia(featuredId) : null;
 
       return {
         meta: editor.getEditedPostAttribute("meta") || {},
@@ -198,7 +213,8 @@
         slug: editor.getEditedPostAttribute("slug") || "",
         permalink: currentPost && currentPost.link ? currentPost.link : "",
         postId: editor.getCurrentPostId(),
-        featuredMedia: editor.getEditedPostAttribute("featured_media") || 0,
+        featuredMedia: featuredId,
+        featuredUrl: featured && featured.source_url ? featured.source_url : "",
       };
     }, []);
 
@@ -279,7 +295,25 @@
     var previewOgTitle = ogTitle || previewTitle;
     var previewOgDescription = ogDescription || previewDescription;
     var previewImage =
-      twitterImage || ogImage || settings.defaultSocialImage || "";
+      twitterImage ||
+      ogImage ||
+      postData.featuredUrl ||
+      settings.defaultSocialImage ||
+      "";
+    var ogFallback = postData.featuredUrl
+      ? {
+          url: postData.featuredUrl,
+          label: __(
+            "Using the featured image. Choose an image here to override it.",
+            "lcp-yeast-seo",
+          ),
+        }
+      : settings.defaultSocialImage
+        ? {
+            url: settings.defaultSocialImage,
+            label: __("Using the site default image.", "lcp-yeast-seo"),
+          }
+        : { url: "", label: "" };
 
     return el(
       Fragment,
@@ -479,8 +513,10 @@
                   onChange: function (value) {
                     updateMeta(settings.metaKeys.ogImage, value);
                   },
+                  fallbackUrl: ogFallback.url,
+                  fallbackLabel: ogFallback.label,
                   help: __(
-                    "Optional link-preview image. Falls back to the site-wide default social image.",
+                    "Optional link-preview image. If empty, the featured image is used, then the first image in the content, then the site default image.",
                     "lcp-yeast-seo",
                   ),
                 }),
@@ -501,8 +537,12 @@
                   onChange: function (value) {
                     updateMeta(settings.metaKeys.twitterImage, value);
                   },
+                  fallbackUrl: ogImage || ogFallback.url,
+                  fallbackLabel: ogImage
+                    ? __("Using the Open Graph image.", "lcp-yeast-seo")
+                    : ogFallback.label,
                   help: __(
-                    "Optional Twitter/X-specific image. Falls back to the Open Graph image.",
+                    "Optional Twitter/X-specific image. If empty, the Open Graph image is used.",
                     "lcp-yeast-seo",
                   ),
                 }),

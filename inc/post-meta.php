@@ -182,6 +182,25 @@ function lcp_yeast_seo_add_meta_box( $post_type ) {
 add_action( 'add_meta_boxes', 'lcp_yeast_seo_add_meta_box' );
 
 /**
+ * Loads the image picker on classic-editor screens, where the meta box is shown.
+ *
+ * @param string $hook Current admin page hook.
+ * @return void
+ */
+function lcp_yeast_seo_enqueue_classic_picker( $hook ) {
+	if ( ! in_array( $hook, array( 'post.php', 'post-new.php' ), true ) ) {
+		return;
+	}
+
+	$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+
+	if ( $screen && ! empty( $screen->post_type ) && ! lcp_yeast_seo_uses_block_editor( $screen->post_type ) && in_array( $screen->post_type, lcp_yeast_seo_post_types(), true ) ) {
+		lcp_yeast_seo_enqueue_image_picker();
+	}
+}
+add_action( 'admin_enqueue_scripts', 'lcp_yeast_seo_enqueue_classic_picker' );
+
+/**
  * Renders the classic-editor fallback meta box.
  *
  * @param WP_Post $post Current post.
@@ -236,12 +255,14 @@ function lcp_yeast_seo_render_meta_box( $post ) {
 		<textarea id="lcp-yeast-seo-og-description-field" name="<?php echo esc_attr( LCP_YEAST_SEO_OG_DESCRIPTION_META_KEY ); ?>" rows="3" class="widefat"><?php echo esc_textarea( $og_description ); ?></textarea>
 	</p>
 	<p>
-		<label for="lcp-yeast-seo-og-image-field"><strong><?php esc_html_e( 'Open Graph image URL', 'lcp-yeast-seo' ); ?></strong></label>
-		<input type="url" id="lcp-yeast-seo-og-image-field" name="<?php echo esc_attr( LCP_YEAST_SEO_OG_IMAGE_META_KEY ); ?>" value="<?php echo esc_attr( $og_image ); ?>" class="widefat code">
+		<strong><?php esc_html_e( 'Open Graph image', 'lcp-yeast-seo' ); ?></strong><br>
+		<?php lcp_yeast_seo_render_image_picker( LCP_YEAST_SEO_OG_IMAGE_META_KEY, (string) $og_image, 'Open Graph image', 'Use as social image' ); ?>
+		<span class="description"><?php esc_html_e( 'If empty, the featured image is used, then the first image in the content, then the site default image.', 'lcp-yeast-seo' ); ?></span>
 	</p>
 	<p>
-		<label for="lcp-yeast-seo-twitter-image-field"><strong><?php esc_html_e( 'Twitter/X image URL', 'lcp-yeast-seo' ); ?></strong></label>
-		<input type="url" id="lcp-yeast-seo-twitter-image-field" name="<?php echo esc_attr( LCP_YEAST_SEO_TWITTER_IMAGE_META_KEY ); ?>" value="<?php echo esc_attr( $twitter_image ); ?>" class="widefat code">
+		<strong><?php esc_html_e( 'Twitter/X image', 'lcp-yeast-seo' ); ?></strong><br>
+		<?php lcp_yeast_seo_render_image_picker( LCP_YEAST_SEO_TWITTER_IMAGE_META_KEY, (string) $twitter_image, 'Twitter/X image', 'Use as Twitter/X image' ); ?>
+		<span class="description"><?php esc_html_e( 'If empty, the Open Graph image is used.', 'lcp-yeast-seo' ); ?></span>
 	</p>
 	<?php if ( lcp_yeast_seo_schema_enabled() ) : ?>
 		<hr>

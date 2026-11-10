@@ -360,7 +360,7 @@ function lcp_yeast_seo_register_settings_page() {
 
 	add_settings_field(
 		'default_social_image',
-		'Default Social Image URL',
+		'Default Social Image',
 		'lcp_yeast_seo_render_default_social_image_field',
 		'lcp-yeast-seo',
 		'lcp_yeast_seo_defaults'
@@ -459,11 +459,58 @@ function lcp_yeast_seo_render_enable_schema_field() {
  * @return void
  */
 function lcp_yeast_seo_render_default_social_image_field() {
-	$value = lcp_yeast_seo_get_setting( 'default_social_image', '' );
+	lcp_yeast_seo_render_image_picker( LCP_YEAST_SEO_SETTINGS_OPTION . '[default_social_image]', (string) lcp_yeast_seo_get_setting( 'default_social_image', '' ), 'Default social image', 'Use as default' );
 	?>
-	<input type="url" name="<?php echo esc_attr( LCP_YEAST_SEO_SETTINGS_OPTION ); ?>[default_social_image]" value="<?php echo esc_attr( $value ); ?>" class="regular-text code">
-	<p class="description">Fallback Open Graph and Twitter image when a post does not set its own.</p>
+	<p class="description">Fallback Open Graph and Twitter image when a post does not set its own and has no featured image. Choose one from the media library or upload a new one; 1200 &times; 630 pixels works best.</p>
 	<?php
+}
+
+/**
+ * Prints a media-library image picker that stores the image's URL.
+ *
+ * Needs assets/image-picker.js and wp_enqueue_media() on the page.
+ *
+ * @param string $name   Form field name.
+ * @param string $url    Current image URL, or ''.
+ * @param string $title  Title of the media modal.
+ * @param string $button Label of the modal's select button.
+ * @return void
+ */
+function lcp_yeast_seo_render_image_picker( $name, $url, $title = 'Choose image', $button = 'Use this image' ) {
+	$url = (string) $url;
+	$id  = '' !== $url ? attachment_url_to_postid( $url ) : 0;
+	?>
+	<div class="lcp-yeast-seo-image" data-image-picker data-image-id="<?php echo (int) $id; ?>" data-title="<?php echo esc_attr( $title ); ?>" data-button="<?php echo esc_attr( $button ); ?>">
+		<input type="hidden" name="<?php echo esc_attr( $name ); ?>" value="<?php echo esc_attr( $url ); ?>" data-image-input>
+		<div class="lcp-yeast-seo-image__preview" data-image-preview><?php echo '' !== $url ? '<img src="' . esc_url( $url ) . '" alt="">' : ''; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped above. ?></div>
+		<button type="button" class="button" data-image-select><?php echo '' !== $url ? 'Change image' : 'Choose image'; ?></button>
+		<button type="button" class="button-link" data-image-remove <?php echo '' !== $url ? '' : 'hidden'; ?>>Remove</button>
+	</div>
+	<?php
+}
+
+/**
+ * Loads the picker script and styles.
+ *
+ * @return void
+ */
+function lcp_yeast_seo_enqueue_image_picker() {
+	wp_enqueue_media();
+
+	foreach ( array(
+		'style'  => 'image-picker.css',
+		'script' => 'image-picker.js',
+	) as $kind => $file ) {
+		$path   = LCP_YEAST_SEO_PATH . 'assets/' . $file;
+		$ver    = file_exists( $path ) ? filemtime( $path ) : LCP_YEAST_SEO_VERSION;
+		$handle = 'lcp-yeast-seo-image-picker';
+
+		if ( 'style' === $kind ) {
+			wp_enqueue_style( $handle, LCP_YEAST_SEO_URL . 'assets/' . $file, array(), $ver );
+		} else {
+			wp_enqueue_script( $handle, LCP_YEAST_SEO_URL . 'assets/' . $file, array(), $ver, true );
+		}
+	}
 }
 
 /**
@@ -738,7 +785,7 @@ function lcp_yeast_seo_settings_assets( $hook ) {
 		return;
 	}
 
-	wp_enqueue_media();
+	lcp_yeast_seo_enqueue_image_picker();
 	$script_path = LCP_YEAST_SEO_PATH . 'assets/settings.js';
 	wp_enqueue_script( 'lcp-yeast-seo-settings', LCP_YEAST_SEO_URL . 'assets/settings.js', array(), file_exists( $script_path ) ? filemtime( $script_path ) : LCP_YEAST_SEO_VERSION, true );
 }

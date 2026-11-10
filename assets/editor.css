@@ -43,7 +43,11 @@
 .lcp-yeast-seo-image-actions {
   display: flex;
   gap: 10px;
-  margin: -4px 0 12px;
+  margin: 8px 0 12px;
+}
+
+.lcp-yeast-seo-image-preview--fallback {
+  opacity: 0.6;
 }
 
 .lcp-yeast-seo-image-preview {

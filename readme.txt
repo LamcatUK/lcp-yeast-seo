@@ -3,7 +3,7 @@ Tags: seo, schema, sitemap, meta description, open graph
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 0.13.1
+Stable tag: 0.13.3
 
 Per-post SEO controls for titles, descriptions, social tags, canonical URLs and schema, with XML sitemaps. Built to replace Yoast one feature at a time.
 
@@ -33,6 +33,14 @@ After every deploy, run the smoke test against the live site. It checks the site
     LCP_SMOKE_URL=https://example.com LCP_SMOKE_ARCHIVE=/guides/ composer test:smoke
 
 == Changelog ==
+
+= 0.13.3 =
+* Change: the per-page Open Graph and Twitter/X images in the Yeast SEO modal are now picker-first: a preview with Choose / Change image and Remove, instead of a URL box. The classic-editor meta box gets the same media-library picker.
+* New: when a page has no image of its own, the field shows the image that will actually be used (the featured image, or the site default) and says so, and the modal's link preview now uses the featured image too.
+* Fix: the help text said the social image falls back straight to the site default. The real order is the page's own image, the featured image, the first image in the content, then the site default.
+
+= 0.13.2 =
+* Change: the default social image is now chosen from the media library (with upload) instead of typing a URL. It shows a preview and has Change and Remove buttons. An image already saved as a URL is kept and shown.
 
 = 0.13.1 =
 * New: "Re-check pages with warnings" beside "Re-check pages with errors" on the Health tab. Each button shows how many pages it covers and hides itself when there are none.
