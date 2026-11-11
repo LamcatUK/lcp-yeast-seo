@@ -890,7 +890,98 @@ function lcp_yeast_seo_ie_count_statuses( array $rows ) {
 }
 
 /**
- * Handles the CSV/XLSX import.
+ * Runs the rows of an uploaded file against the site, or reports what that would do.
+ *
+ * Used by the dry run and again by "Apply", so what is applied is exactly what was shown.
+ *
+ * @param array $parsed  Rows from the file (url, meta_title, meta_description, noindex, canonical).
+ * @param array $options update_title, update_description, update_noindex, update_canonical, overwrite.
+ * @param bool  $dry_run Only report.
+ * @return array{rows:array[],counts:int[]}
+ */
+function lcp_yeast_seo_ie_process_rows( array $parsed, array $options, $dry_run ) {
+	$rows = array();
+
+	foreach ( $parsed as $index => $row ) {
+		$number = $index + 2;
+		$url    = trim( $row['url'] );
+		$title  = ! empty( $options['update_title'] ) ? trim( $row['meta_title'] ) : '';
+		$desc   = ! empty( $options['update_description'] ) ? trim( $row['meta_description'] ) : '';
+		$robots = ! empty( $options['update_noindex'] ) ? lcp_yeast_seo_ie_parse_robots_cell( $row['noindex'] ) : '';
+		$canon  = ! empty( $options['update_canonical'] ) ? trim( $row['canonical'] ) : '';
+
+		if ( '' === $url ) {
+			$rows[] = lcp_yeast_seo_ie_result_row( $number, $url, 'Skipped', 'Missing URL.', $title, $desc, '', array( 'robots' => $robots, 'canonical' => $canon ) );
+			continue;
+		}
+
+		$match = lcp_yeast_seo_ie_resolve_post( $url );
+
+		if ( $match['error'] || ! $match['post_id'] ) {
+			$rows[] = lcp_yeast_seo_ie_result_row( $number, $url, 'Skipped', $match['error'] ?: 'No matching page or post found for this URL.', $title, $desc, '', array( 'robots' => $robots, 'canonical' => $canon ) );
+			continue;
+		}
+
+		$extras = array(
+			'robots'    => $robots,
+			'canonical' => lcp_yeast_seo_ie_clean_canonical( $canon, (string) get_permalink( $match['post_id'] ) ),
+		);
+
+		list( $status, $message, $details ) = lcp_yeast_seo_ie_apply( $match['post_id'], $title, $desc, $dry_run, ! empty( $options['overwrite'] ), $extras );
+
+		$rows[] = lcp_yeast_seo_ie_result_row( $number, $url, $status, $message, $title, $desc, lcp_yeast_seo_ie_relative_url( $match['post_id'] ), array( 'robots' => $robots, 'canonical' => $canon, 'details' => $details ) );
+	}
+
+	return array(
+		'rows'   => $rows,
+		'counts' => lcp_yeast_seo_ie_count_statuses( $rows ),
+	);
+}
+
+/**
+ * The transient that holds a dry-run file while it waits to be applied.
+ *
+ * @return string
+ */
+function lcp_yeast_seo_ie_pending_key() {
+	return 'lcp_yeast_seo_ie_pending_' . get_current_user_id();
+}
+
+/**
+ * Whether a parsed file is small enough to keep between the dry run and the apply.
+ *
+ * @param array $parsed Parsed rows.
+ * @return bool
+ */
+function lcp_yeast_seo_ie_pending_fits( array $parsed ) {
+	return strlen( (string) wp_json_encode( $parsed ) ) <= 6 * 1024 * 1024;
+}
+
+/**
+ * A short description of a waiting import: what was chosen, and whether overwriting is on.
+ *
+ * @param array $options update_title, update_description, update_noindex, update_canonical, overwrite.
+ * @return string
+ */
+function lcp_yeast_seo_ie_pending_options_text( array $options ) {
+	$fields = array();
+
+	foreach ( array(
+		'update_title'       => 'titles',
+		'update_description' => 'descriptions',
+		'update_noindex'     => 'noindex',
+		'update_canonical'   => 'canonicals',
+	) as $key => $label ) {
+		if ( ! empty( $options[ $key ] ) ) {
+			$fields[] = $label;
+		}
+	}
+
+	return 'Updating ' . ( $fields ? implode( ', ', $fields ) : 'nothing' ) . '; ' . ( ! empty( $options['overwrite'] ) ? 'overwriting existing values.' : 'keeping existing values.' );
+}
+
+/**
+ * Handles the import form. A dry run keeps the parsed file so it can be applied without uploading it again.
  *
  * @return void
  */
@@ -901,14 +992,16 @@ function lcp_yeast_seo_ie_handle_import() {
 
 	check_admin_referer( LCP_YEAST_SEO_IE_NONCE );
 
-	$update_title = ! empty( $_POST['update_title'] );
-	$update_desc  = ! empty( $_POST['update_description'] );
-	$update_index = ! empty( $_POST['update_noindex'] );
-	$update_canon = ! empty( $_POST['update_canonical'] );
-	$dry_run      = ! empty( $_POST['dry_run'] );
-	$overwrite    = ! empty( $_POST['overwrite'] );
+	$options = array(
+		'update_title'       => ! empty( $_POST['update_title'] ),
+		'update_description' => ! empty( $_POST['update_description'] ),
+		'update_noindex'     => ! empty( $_POST['update_noindex'] ),
+		'update_canonical'   => ! empty( $_POST['update_canonical'] ),
+		'overwrite'          => ! empty( $_POST['overwrite'] ),
+	);
+	$dry_run = ! empty( $_POST['dry_run'] );
 
-	if ( ! $update_title && ! $update_desc && ! $update_index && ! $update_canon ) {
+	if ( ! $options['update_title'] && ! $options['update_description'] && ! $options['update_noindex'] && ! $options['update_canonical'] ) {
 		lcp_yeast_seo_ie_redirect( false, 'Select at least one field to update.' );
 	}
 
@@ -930,49 +1023,131 @@ function lcp_yeast_seo_ie_handle_import() {
 		lcp_yeast_seo_ie_redirect( false, $parsed->get_error_message() );
 	}
 
-	$rows = array();
+	$result  = lcp_yeast_seo_ie_process_rows( $parsed, $options, $dry_run );
+	$counts  = $result['counts'];
+	$kept    = false;
 
-	foreach ( $parsed as $index => $row ) {
-		$number = $index + 2;
-		$url    = trim( $row['url'] );
-		$title  = $update_title ? trim( $row['meta_title'] ) : '';
-		$desc   = $update_desc ? trim( $row['meta_description'] ) : '';
-		$robots = $update_index ? lcp_yeast_seo_ie_parse_robots_cell( $row['noindex'] ) : '';
-		$canon  = $update_canon ? trim( $row['canonical'] ) : '';
-
-		if ( '' === $url ) {
-			$rows[] = lcp_yeast_seo_ie_result_row( $number, $url, 'Skipped', 'Missing URL.', $title, $desc, '', array( 'robots' => $robots, 'canonical' => $canon ) );
-			continue;
-		}
-
-		$match = lcp_yeast_seo_ie_resolve_post( $url );
-
-		if ( $match['error'] || ! $match['post_id'] ) {
-			$rows[] = lcp_yeast_seo_ie_result_row( $number, $url, 'Skipped', $match['error'] ?: 'No matching page or post found for this URL.', $title, $desc, '', array( 'robots' => $robots, 'canonical' => $canon ) );
-			continue;
-		}
-
-		$extras = array(
-			'robots'    => $robots,
-			'canonical' => lcp_yeast_seo_ie_clean_canonical( $canon, (string) get_permalink( $match['post_id'] ) ),
+	if ( $dry_run && lcp_yeast_seo_ie_pending_fits( $parsed ) ) {
+		set_transient(
+			lcp_yeast_seo_ie_pending_key(),
+			array(
+				'name'    => sanitize_file_name( $file['name'] ),
+				'size'    => (int) $file['size'],
+				'rows'    => count( $parsed ),
+				'parsed'  => $parsed,
+				'options' => $options,
+				'time'    => time(),
+			),
+			30 * MINUTE_IN_SECONDS
 		);
-
-		list( $status, $message, $details ) = lcp_yeast_seo_ie_apply( $match['post_id'], $title, $desc, $dry_run, $overwrite, $extras );
-
-		$rows[] = lcp_yeast_seo_ie_result_row( $number, $url, $status, $message, $title, $desc, lcp_yeast_seo_ie_relative_url( $match['post_id'] ), array( 'robots' => $robots, 'canonical' => $canon, 'details' => $details ) );
+		$kept = true;
+	} else {
+		delete_transient( lcp_yeast_seo_ie_pending_key() );
 	}
-
-	$counts = lcp_yeast_seo_ie_count_statuses( $rows );
 
 	lcp_yeast_seo_ie_redirect(
 		true,
-		$dry_run ? sprintf( 'Dry run complete. Reviewed %d row(s); %d would change, %d already match or would be kept.', count( $rows ), $counts['Dry run'], $counts['Unchanged'] ) : sprintf( 'Import complete. Updated %d of %d row(s).', $counts['Updated'], count( $rows ) ),
-		$rows,
+		$dry_run
+			? sprintf( 'Dry run complete. Reviewed %d row(s); %d would change, %d already match or would be kept.%s', count( $result['rows'] ), $counts['Dry run'], $counts['Unchanged'], $kept ? '' : ' The file is too large to keep, so upload it again to apply it.' )
+			: sprintf( 'Import complete. Updated %d of %d row(s).', $counts['Updated'], count( $result['rows'] ) ),
+		$result['rows'],
 		$counts,
 		$dry_run
 	);
 }
 add_action( 'admin_post_lcp_yeast_seo_import', 'lcp_yeast_seo_ie_handle_import' );
+
+/**
+ * Applies a file that was dry-run, without uploading it again.
+ *
+ * @return void
+ */
+function lcp_yeast_seo_ie_handle_import_apply() {
+	if ( ! current_user_can( 'manage_options' ) ) {
+		wp_die( esc_html__( 'You do not have permission to perform this action.', 'lcp-yeast-seo' ) );
+	}
+
+	check_admin_referer( LCP_YEAST_SEO_IE_NONCE );
+
+	$pending = get_transient( lcp_yeast_seo_ie_pending_key() );
+
+	if ( ! is_array( $pending ) || empty( $pending['parsed'] ) ) {
+		lcp_yeast_seo_ie_redirect( false, 'The file is no longer waiting (it is kept for 30 minutes after a dry run). Upload it again.' );
+	}
+
+	delete_transient( lcp_yeast_seo_ie_pending_key() );
+
+	$result = lcp_yeast_seo_ie_process_rows( (array) $pending['parsed'], (array) $pending['options'], false );
+
+	lcp_yeast_seo_ie_redirect(
+		true,
+		sprintf( 'Import complete (%s). Updated %d of %d row(s).', $pending['name'], $result['counts']['Updated'], count( $result['rows'] ) ),
+		$result['rows'],
+		$result['counts'],
+		false
+	);
+}
+add_action( 'admin_post_lcp_yeast_seo_import_apply', 'lcp_yeast_seo_ie_handle_import_apply' );
+
+/**
+ * Throws away a file that was dry-run, without applying it.
+ *
+ * @return void
+ */
+function lcp_yeast_seo_ie_handle_import_cancel() {
+	if ( ! current_user_can( 'manage_options' ) ) {
+		wp_die( esc_html__( 'You do not have permission to perform this action.', 'lcp-yeast-seo' ) );
+	}
+
+	check_admin_referer( LCP_YEAST_SEO_IE_NONCE );
+
+	$pending = get_transient( lcp_yeast_seo_ie_pending_key() );
+
+	delete_transient( lcp_yeast_seo_ie_pending_key() );
+
+	lcp_yeast_seo_ie_redirect( true, is_array( $pending ) ? sprintf( 'Cancelled. %s was not applied and has been discarded.', $pending['name'] ) : 'There was no file waiting.' );
+}
+add_action( 'admin_post_lcp_yeast_seo_import_cancel', 'lcp_yeast_seo_ie_handle_import_cancel' );
+
+/**
+ * Shows a dry-run file that is waiting, with Apply and Cancel.
+ *
+ * @return bool Whether anything was shown.
+ */
+function lcp_yeast_seo_ie_render_pending() {
+	$pending = get_transient( lcp_yeast_seo_ie_pending_key() );
+
+	if ( ! is_array( $pending ) || empty( $pending['parsed'] ) ) {
+		return false;
+	}
+
+	$action = static function ( $name, $label, $class ) {
+		?>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<input type="hidden" name="action" value="<?php echo esc_attr( $name ); ?>">
+			<?php wp_nonce_field( LCP_YEAST_SEO_IE_NONCE ); ?>
+			<?php submit_button( $label, $class, 'submit', false ); ?>
+		</form>
+		<?php
+	};
+	?>
+	<section class="lcp-ys-card lcp-ys-pending">
+		<div class="lcp-ys-pending__file">
+			<strong><?php echo esc_html( $pending['name'] ); ?></strong>
+			<span><?php echo esc_html( lcp_yeast_seo_count_noun( (int) $pending['rows'], 'row' ) . ', ' . size_format( (int) $pending['size'] ) . '. Checked ' . human_time_diff( (int) $pending['time'] ) . ' ago and waiting to be applied.' ); ?></span>
+			<span class="lcp-ys-pending__options"><?php echo esc_html( lcp_yeast_seo_ie_pending_options_text( (array) $pending['options'] ) ); ?></span>
+		</div>
+		<div class="lcp-ys-pending__actions">
+			<?php
+			$action( 'lcp_yeast_seo_import_apply', 'Apply these changes', 'primary' );
+			$action( 'lcp_yeast_seo_import_cancel', 'Cancel', 'secondary' );
+			?>
+		</div>
+	</section>
+	<?php
+
+	return true;
+}
 
 /**
  * Selected post types from a submitted form, limited to the ones this plugin manages.
@@ -1508,14 +1683,14 @@ function lcp_yeast_seo_ie_render_result_row( array $row ) {
 /**
  * Shows the result of the last import or migration, once.
  *
- * @return void
+ * @return bool Whether a result was shown.
  */
 function lcp_yeast_seo_ie_render_result() {
 	$key    = 'lcp_yeast_seo_ie_result_' . get_current_user_id();
 	$result = get_transient( $key );
 
 	if ( ! is_array( $result ) ) {
-		return;
+		return false;
 	}
 
 	delete_transient( $key );
@@ -1528,7 +1703,7 @@ function lcp_yeast_seo_ie_render_result() {
 		?>
 		<div class="notice notice-<?php echo $result['success'] ? 'success' : 'error'; ?>"><p><?php echo esc_html( $result['message'] ); ?></p></div>
 		<?php
-		return;
+		return true;
 	}
 
 	$change  = (int) ( $counts['Dry run'] ?? 0 ) + (int) ( $counts['Updated'] ?? 0 );
@@ -1538,7 +1713,7 @@ function lcp_yeast_seo_ie_render_result() {
 	<section class="lcp-ys-card lcp-ys-results" data-results data-filter="all">
 		<div class="lcp-ys-card__head">
 			<h2><?php echo $dry ? 'Dry run: nothing has been saved' : 'Results'; ?></h2>
-			<div class="lcp-ys-card__intro"><p><?php echo $dry ? 'This is what would happen. To save these changes, untick "Dry run" and run it again.' : esc_html( $result['message'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static text or escaped. ?></p></div>
+			<div class="lcp-ys-card__intro"><p><?php echo $dry ? 'This is what would happen. Nothing has been saved. Use "Apply these changes" above to save them without uploading the file again, or Cancel to discard it.' : esc_html( $result['message'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static text or escaped. ?></p></div>
 		</div>
 		<div class="lcp-ys-results__bar">
 			<ul class="lcp-ys-tally">
@@ -1607,6 +1782,7 @@ function lcp_yeast_seo_ie_render_tab() {
 	// The same for the clear panel, which also covers data an import would not read.
 	$preselect_legacy = ! empty( $legacy[ $default ]['all']['values'] ) ? $default : (string) array_key_first( array_filter( array_map( static function ( $counts ) { return $counts['all']['values']; }, $legacy ) ) );
 
+	lcp_yeast_seo_ie_render_pending();
 	lcp_yeast_seo_ie_render_result();
 	?>
 	<section class="lcp-ys-card">

@@ -455,4 +455,23 @@ class ImportExportTest extends TestCase {
 			}
 		}
 	}
+
+	public function test_pending_options_text_lists_the_chosen_fields() {
+		$this->assertSame(
+			'Updating titles, canonicals; keeping existing values.',
+			lcp_yeast_seo_ie_pending_options_text( array( 'update_title' => true, 'update_canonical' => true ) )
+		);
+		$this->assertSame(
+			'Updating descriptions; overwriting existing values.',
+			lcp_yeast_seo_ie_pending_options_text( array( 'update_description' => true, 'overwrite' => true ) )
+		);
+		$this->assertSame( 'Updating nothing; keeping existing values.', lcp_yeast_seo_ie_pending_options_text( array() ) );
+	}
+
+	public function test_a_small_file_fits_and_a_huge_one_does_not() {
+		Functions\when( 'wp_json_encode' )->alias( 'json_encode' );
+
+		$this->assertTrue( lcp_yeast_seo_ie_pending_fits( array( array( 'url' => '/a/' ) ) ) );
+		$this->assertFalse( lcp_yeast_seo_ie_pending_fits( array( array( 'url' => str_repeat( 'x', 7 * 1024 * 1024 ) ) ) ) );
+	}
 }

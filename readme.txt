@@ -3,7 +3,7 @@ Tags: seo, schema, sitemap, meta description, open graph
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 0.20.1
+Stable tag: 0.21.0
 
 Per-post SEO controls for titles, descriptions, social tags, canonical URLs and schema, with XML sitemaps. Built to replace Yoast one feature at a time.
 
@@ -33,6 +33,9 @@ After every deploy, run the smoke test against the live site. It checks the site
     LCP_SMOKE_URL=https://example.com LCP_SMOKE_ARCHIVE=/guides/ composer test:smoke
 
 == Changelog ==
+
+= 0.21.0 =
+* New: a CSV or XLSX import dry run now keeps the file. After the check, the file name, size and settings stay at the top of the Import / Export tab with "Apply these changes" and "Cancel" buttons, so you do not have to upload it again. Apply runs exactly the rows and options that were checked; Cancel discards the file. The file is kept for 30 minutes (and survives a page reload), and files too large to keep ask you to upload again.
 
 = 0.20.1 =
 * Fix: taxonomy sitemaps (such as `work_type-sitemap.xml`) were added automatically for every taxonomy the theme uses, with no way to switch one off. They are now opt-in: each taxonomy the theme uses appears as an "archive pages" tick under XML sitemaps, Included content, and is left out of the sitemap until ticked. A taxonomy whose archive is set to noindex is still never listed. Sites that had a taxonomy sitemap since 0.17.0 will lose it until it is ticked.

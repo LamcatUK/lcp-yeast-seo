@@ -1646,3 +1646,32 @@
 	font-size: 11px;
 	font-style: normal;
 }
+
+.lcp-ys-pending {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	padding: 16px 20px;
+	border-left: 4px solid var(--lcp-ys-gold, #c9a227);
+}
+.lcp-ys-pending__file {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+.lcp-ys-pending__file strong {
+	overflow-wrap: anywhere;
+}
+.lcp-ys-pending__options {
+	color: #50575e;
+}
+.lcp-ys-pending__actions {
+	display: flex;
+	gap: 8px;
+}
+.lcp-ys-pending__actions form {
+	margin: 0;
+}
