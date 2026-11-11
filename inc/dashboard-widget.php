@@ -127,16 +127,12 @@ function lcp_yeast_seo_render_dashboard_widget() {
 	}
 
 	$counts = lcp_yeast_seo_widget_index_counts( $ids, $settings );
-	$clean  = $totals['checked'] && ! $problems && ! $stale && ! $hidden && ! $tip && ! is_array( $pending );
 	?>
 	<div class="lcp-ys lcp-ys-dw">
 		<?php if ( $hidden ) : ?>
 			<p class="lcp-ys-dw__alert">This site is set to discourage search engines, so every page carries noindex. <a href="<?php echo esc_url( admin_url( 'options-reading.php' ) ); ?>">Change it under Settings, Reading</a> when you are ready to launch.</p>
 		<?php endif; ?>
 
-		<?php if ( $clean ) : ?>
-			<p class="lcp-ys-dw__clean">No SEO issues found. Last scanned <?php echo esc_html( human_time_diff( $last ) ); ?> ago.</p>
-		<?php else : ?>
 			<section class="lcp-ys-dw__block">
 				<h3>Site health</h3>
 				<?php if ( ! $totals['checked'] ) : ?>
@@ -147,7 +143,9 @@ function lcp_yeast_seo_render_dashboard_widget() {
 						<li class="lcp-ys-chip lcp-ys-chip--<?php echo $totals['warning'] ? 'warn' : 'neutral'; ?>"><?php echo esc_html( $totals['warning'] . ' with warnings' ); ?></li>
 						<li class="lcp-ys-chip lcp-ys-chip--<?php echo $totals['error'] ? 'error' : 'neutral'; ?>"><?php echo esc_html( $totals['error'] . ' with errors' ); ?></li>
 					</ul>
-					<?php if ( $problems ) : ?>
+					<?php if ( ! $problems ) : ?>
+						<p>No problems found.</p>
+					<?php else : ?>
 						<ul class="lcp-ys-dw__list">
 							<?php foreach ( $problems as $problem ) : ?>
 								<li class="lcp-ys-dw__item lcp-ys-dw__item--<?php echo esc_attr( $problem['level'] ); ?>">
@@ -167,14 +165,18 @@ function lcp_yeast_seo_render_dashboard_widget() {
 					</p>
 				<?php endif; ?>
 			</section>
-		<?php endif; ?>
 
 		<?php if ( $tip ) : ?>
 			<section class="lcp-ys-dw__block">
 				<h3>Organization schema: <?php echo esc_html( $score['result']['score'] ); ?> out of 100</h3>
 				<p><strong><?php echo esc_html( $tip['label'] ); ?>.</strong> <?php echo esc_html( wp_trim_words( $tip['tip'], 24 ) ); ?> <a href="<?php echo esc_url( lcp_yeast_seo_widget_tab_url( 'schema' ) ); ?>">Open the wizard</a></p>
 			</section>
-		<?php elseif ( in_array( $score['state'], array( 'none', 'invalid', 'no_org' ), true ) ) : ?>
+		<?php elseif ( 'ok' === $score['state'] ) : ?>
+			<section class="lcp-ys-dw__block">
+				<h3>Organization schema: <?php echo esc_html( $score['result']['score'] ); ?> out of 100</h3>
+				<p>Nothing to add.</p>
+			</section>
+		<?php else : ?>
 			<section class="lcp-ys-dw__block">
 				<h3>Organization schema</h3>
 				<p><?php echo esc_html( $score['message'] ); ?> <a href="<?php echo esc_url( lcp_yeast_seo_widget_tab_url( 'schema' ) ); ?>">Open Schema</a></p>
