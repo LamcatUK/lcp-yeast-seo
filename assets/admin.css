@@ -1675,3 +1675,57 @@
 .lcp-ys-pending__actions form {
 	margin: 0;
 }
+
+.lcp-ys-dw {
+	max-width: none;
+}
+.lcp-ys-dw__alert {
+	margin: 0 0 12px;
+	padding: 8px 12px;
+	background: var(--ys-err-bg);
+	color: var(--ys-err-fg);
+	border-radius: 4px;
+}
+.lcp-ys-dw__alert a {
+	color: inherit;
+	font-weight: 600;
+}
+.lcp-ys-dw__clean {
+	margin: 0 0 8px;
+	color: var(--ys-ok-fg);
+	font-weight: 600;
+}
+.lcp-ys-dw__block {
+	padding: 10px 0;
+	border-top: 1px solid var(--ys-line-soft);
+}
+.lcp-ys-dw__block:first-child {
+	border-top: 0;
+	padding-top: 0;
+}
+.lcp-ys-dw__block h3 {
+	margin: 0 0 6px;
+	font-size: 13px;
+}
+.lcp-ys-dw__block p {
+	margin: 0 0 6px;
+}
+.lcp-ys-dw__list {
+	margin: 8px 0;
+	padding: 0;
+	list-style: none;
+}
+.lcp-ys-dw__item {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 4px 0 4px 10px;
+	border-left: 3px solid var(--ys-gold);
+}
+.lcp-ys-dw__item--error {
+	border-left-color: #b32d2e;
+}
+.lcp-ys-dw__item span,
+.lcp-ys-dw__meta {
+	color: var(--ys-muted);
+}

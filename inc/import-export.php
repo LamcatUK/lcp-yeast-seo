@@ -1110,6 +1110,24 @@ function lcp_yeast_seo_ie_handle_import_cancel() {
 add_action( 'admin_post_lcp_yeast_seo_import_cancel', 'lcp_yeast_seo_ie_handle_import_cancel' );
 
 /**
+ * One button that posts to the apply or cancel handler.
+ *
+ * @param string $name  The admin-post action.
+ * @param string $label Button text.
+ * @param string $class Button class (primary or secondary).
+ * @return void
+ */
+function lcp_yeast_seo_ie_render_pending_button( $name, $label, $class ) {
+	?>
+	<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+		<input type="hidden" name="action" value="<?php echo esc_attr( $name ); ?>">
+		<?php wp_nonce_field( LCP_YEAST_SEO_IE_NONCE ); ?>
+		<?php submit_button( $label, $class, 'submit', false ); ?>
+	</form>
+	<?php
+}
+
+/**
  * Shows a dry-run file that is waiting, with Apply and Cancel.
  *
  * @return bool Whether anything was shown.
@@ -1121,15 +1139,6 @@ function lcp_yeast_seo_ie_render_pending() {
 		return false;
 	}
 
-	$action = static function ( $name, $label, $class ) {
-		?>
-		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-			<input type="hidden" name="action" value="<?php echo esc_attr( $name ); ?>">
-			<?php wp_nonce_field( LCP_YEAST_SEO_IE_NONCE ); ?>
-			<?php submit_button( $label, $class, 'submit', false ); ?>
-		</form>
-		<?php
-	};
 	?>
 	<section class="lcp-ys-card lcp-ys-pending">
 		<div class="lcp-ys-pending__file">
@@ -1139,8 +1148,8 @@ function lcp_yeast_seo_ie_render_pending() {
 		</div>
 		<div class="lcp-ys-pending__actions">
 			<?php
-			$action( 'lcp_yeast_seo_import_apply', 'Apply these changes', 'primary' );
-			$action( 'lcp_yeast_seo_import_cancel', 'Cancel', 'secondary' );
+			lcp_yeast_seo_ie_render_pending_button( 'lcp_yeast_seo_import_apply', 'Apply these changes', 'primary' );
+			lcp_yeast_seo_ie_render_pending_button( 'lcp_yeast_seo_import_cancel', 'Cancel', 'secondary' );
 			?>
 		</div>
 	</section>

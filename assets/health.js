@@ -357,4 +357,14 @@
 
 	observer.observe( list, { childList: true } );
 	syncFilter();
+
+	// A link from the dashboard widget opens the list already filtered to one problem.
+	var wanted = new URLSearchParams( window.location.search ).get( 'problem' );
+	var wantedButton = wanted ? Array.prototype.filter.call( root.querySelectorAll( '[data-problem]' ), function ( button ) {
+		return button.getAttribute( 'data-problem' ) === wanted;
+	} )[ 0 ] : null;
+
+	if ( wantedButton ) {
+		wantedButton.click();
+	}
 }() );

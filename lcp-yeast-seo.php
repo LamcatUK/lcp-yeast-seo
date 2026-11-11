@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Yeast SEO
  * Description: Per-post SEO controls for title, meta description, and JSON-LD schema.
- * Version: 0.21.0
+ * Version: 0.22.0
  * Requires PHP: 7.4
  * Author: Lamcat - DS
  * Text Domain: lcp-yeast-seo
@@ -14,7 +14,7 @@ defined( 'ABSPATH' ) || exit;
 
 define( 'LCP_YEAST_SEO_PATH', plugin_dir_path( __FILE__ ) );
 define( 'LCP_YEAST_SEO_URL', plugin_dir_url( __FILE__ ) );
-define( 'LCP_YEAST_SEO_VERSION', '0.21.0' );
+define( 'LCP_YEAST_SEO_VERSION', '0.22.0' );
 
 require_once LCP_YEAST_SEO_PATH . 'inc/settings.php';
 require_once LCP_YEAST_SEO_PATH . 'inc/post-meta.php';
@@ -35,6 +35,7 @@ require_once LCP_YEAST_SEO_PATH . 'inc/robots.php';
 require_once LCP_YEAST_SEO_PATH . 'inc/health.php';
 require_once LCP_YEAST_SEO_PATH . 'inc/health-content.php';
 require_once LCP_YEAST_SEO_PATH . 'inc/admin-ui.php';
+require_once LCP_YEAST_SEO_PATH . 'inc/dashboard-widget.php';
 
 register_activation_hook( __FILE__, 'lcp_yeast_seo_activate' );
 register_deactivation_hook( __FILE__, 'lcp_yeast_seo_deactivate' );

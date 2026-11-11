@@ -3,7 +3,7 @@ Tags: seo, schema, sitemap, meta description, open graph
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 0.21.0
+Stable tag: 0.22.0
 
 Per-post SEO controls for titles, descriptions, social tags, canonical URLs and schema, with XML sitemaps. Built to replace Yoast one feature at a time.
 
@@ -33,6 +33,9 @@ After every deploy, run the smoke test against the live site. It checks the site
     LCP_SMOKE_URL=https://example.com LCP_SMOKE_ARCHIVE=/guides/ composer test:smoke
 
 == Changelog ==
+
+= 0.22.0 =
+* New: a Yeast SEO widget on the WordPress dashboard (administrators only). It shows a warning if the site is set to discourage search engines, the last health scan's totals and the problems that affect the most pages (each links to the filtered Health tab), the Organization schema score with its single most valuable fix, how many pages can be indexed, and an import file waiting to be applied, with Apply and Cancel. It only reads stored results, so it never slows the dashboard, and it collapses to one line when nothing needs attention.
 
 = 0.21.0 =
 * New: a CSV or XLSX import dry run now keeps the file. After the check, the file name, size and settings stay at the top of the Import / Export tab with "Apply these changes" and "Cancel" buttons, so you do not have to upload it again. Apply runs exactly the rows and options that were checked; Cancel discards the file. The file is kept for 30 minutes (and survives a page reload), and files too large to keep ask you to upload again.
