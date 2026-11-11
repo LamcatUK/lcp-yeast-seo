@@ -386,17 +386,23 @@ function lcp_yeast_seo_render_org_wizard_field() {
 	lcp_yeast_seo_enqueue_org_wizard();
 	?>
 	<div class="lcp-ys-wiz" data-wizard>
+		<div class="lcp-ys-wiz__layout">
 		<ol class="lcp-ys-wiz__steps" aria-label="Wizard steps">
 			<?php foreach ( $steps as $i => $title ) : ?>
-				<li data-wizard-tab="<?php echo (int) $i; ?>"><?php echo esc_html( $title ); ?></li>
+				<li><button type="button" data-wizard-tab="<?php echo (int) $i; ?>"><span class="lcp-ys-wiz__glyph" aria-hidden="true"><?php echo (int) ( $i + 1 ); ?></span><span><?php echo esc_html( $title ); ?></span></button></li>
 			<?php endforeach; ?>
 		</ol>
+		<div class="lcp-ys-wiz__pane">
 		<?php if ( 'fields' === $source['mode'] && $source['nodes'] ) : ?>
 			<p class="description">Your details are currently entered in the form fields. Saving carries them across and switches the source to JSON-LD, which can also hold opening hours and areas served.</p>
 		<?php endif; ?>
+		<header class="lcp-ys-wiz__head">
+			<p class="lcp-ys-wiz__count" data-wizard-position></p>
+			<h3 data-wizard-title></h3>
+			<p class="lcp-ys-wiz__intro" data-wizard-intro></p>
+		</header>
 
-		<section data-wizard-step="0">
-			<h3>Your business</h3>
+		<section data-wizard-step="0" data-title="Your business" data-intro="<?php echo esc_attr( 'Start with the name and what you do. Search engines show this beside your listing.' ); ?>">
 			<?php
 			lcp_yeast_seo_wizard_field( 'name', 'Business name', $values, array( 'help' => 'The name people know you by.' ) );
 			lcp_yeast_seo_wizard_field( 'type', 'Kind of business', $values, array( 'type' => 'select', 'options' => $types, 'help' => 'A more specific type helps search engines treat you as a local business.' ) );
@@ -406,8 +412,7 @@ function lcp_yeast_seo_render_org_wizard_field() {
 			?>
 		</section>
 
-		<section data-wizard-step="1" hidden>
-			<h3>Your brand</h3>
+		<section data-wizard-step="1" data-title="Your brand" data-intro="<?php echo esc_attr( 'A logo and a photo make the listing look like a real business, and your profiles tie it to the rest of the web.' ); ?>" hidden>
 			<div class="lcp-ys-wiz__field">
 				<label>Logo</label>
 				<?php lcp_yeast_seo_render_image_picker( 'wiz[logo]', $values['logo'], 'Logo', 'Use as logo', $form ); ?>
@@ -420,8 +425,7 @@ function lcp_yeast_seo_render_org_wizard_field() {
 			<?php lcp_yeast_seo_wizard_field( 'same_as', 'Profiles and listings', $values, array( 'type' => 'textarea', 'rows' => 4, 'help' => 'One web address per line: Facebook, LinkedIn, Instagram, your Google Business Profile, directory listings.' ) ); ?>
 		</section>
 
-		<section data-wizard-step="2" hidden>
-			<h3>How people reach you</h3>
+		<section data-wizard-step="2" data-title="How people reach you" data-intro="<?php echo esc_attr( 'Give people one number to ring and one address to write to. On a phone, searchers can ring straight from the result.' ); ?>" hidden>
 			<?php
 			lcp_yeast_seo_wizard_field( 'telephone', 'Telephone', $values, array( 'placeholder' => '+44 1624 000000' ) );
 			lcp_yeast_seo_wizard_field( 'email', 'Email', $values, array( 'type' => 'email' ) );
@@ -443,8 +447,7 @@ function lcp_yeast_seo_render_org_wizard_field() {
 			?>
 		</section>
 
-		<section data-wizard-step="3" hidden>
-			<h3>Where you work</h3>
+		<section data-wizard-step="3" data-title="Where you work" data-intro="<?php echo esc_attr( 'Say where you work. If you go to customers\' homes, tick the box and list the areas you cover instead of a street.' ); ?>" hidden>
 			<div class="lcp-ys-wiz__field">
 				<label><input type="checkbox" data-wizard-home form="<?php echo esc_attr( $form ); ?>" <?php checked( '' === $values['street'] && '' !== $values['areas'] ); ?>> I work from home or travel to customers, so I do not show a street address</label>
 			</div>
@@ -468,8 +471,7 @@ function lcp_yeast_seo_render_org_wizard_field() {
 			</div>
 		</section>
 
-		<section data-wizard-step="4" hidden>
-			<h3>Hours and price</h3>
+		<section data-wizard-step="4" data-title="Hours and price" data-intro="<?php echo esc_attr( 'Opening hours answer "are they open now?" before anyone clicks. Leave them out if yours change a lot.' ); ?>" hidden>
 			<div class="lcp-ys-wiz__field">
 				<label>Opening hours</label>
 				<?php foreach ( array( 'keep' => 'Leave as they are', 'set' => 'Use the hours below', 'remove' => 'Remove the hours' ) as $mode => $text ) : ?>
@@ -505,18 +507,19 @@ function lcp_yeast_seo_render_org_wizard_field() {
 			?>
 		</section>
 
-		<section data-wizard-step="5" hidden>
-			<h3>Review</h3>
-			<p class="description">This is what your schema will become. Nothing is saved until you press Save.</p>
-			<div data-wizard-review aria-live="polite"><p>Press Preview to see it.</p></div>
+		<section data-wizard-step="5" data-title="Review" data-intro="<?php echo esc_attr( 'This is what your schema will become. Nothing is saved until you press Save.' ); ?>" hidden>
+			<div data-wizard-review aria-live="polite"><p>Working it out...</p></div>
 		</section>
 
 		<p class="lcp-ys-wiz__nav">
 			<button type="button" class="button" data-wizard-back>Back</button>
-			<button type="button" class="button button-primary" data-wizard-next>Next</button>
-			<button type="submit" class="button button-primary" data-wizard-save form="<?php echo esc_attr( $form ); ?>" hidden>Save to my schema</button>
-			<span class="description" data-wizard-position></span>
+			<span class="lcp-ys-wiz__next">
+				<button type="button" class="button button-primary" data-wizard-next>Continue</button>
+				<button type="submit" class="button button-primary" data-wizard-save form="<?php echo esc_attr( $form ); ?>" hidden>Save to my schema</button>
+			</span>
 		</p>
+		</div>
+		</div>
 	</div>
 	<?php
 }

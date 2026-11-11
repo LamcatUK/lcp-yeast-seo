@@ -108,11 +108,13 @@ function lcp_yeast_seo_render_dashboard_widget() {
 	$ids      = lcp_yeast_seo_health_page_ids();
 	$results  = lcp_yeast_seo_health_effective( $ids, lcp_yeast_seo_health_results() );
 	$totals   = lcp_yeast_seo_health_totals( $ids, $results );
-	$problems = lcp_yeast_seo_widget_top_problems( lcp_yeast_seo_health_common_problems( $ids, $results ) );
+	$problems = lcp_yeast_seo_widget_top_problems( lcp_yeast_seo_health_common_problems( $ids, $results ), 1 );
 	$last     = $totals['checked'] ? (int) max( array_column( array_intersect_key( $results, array_flip( $ids ) ), 'time' ) ) : 0;
 	$stale    = lcp_yeast_seo_widget_scan_is_stale( $last, time() );
 	$score    = lcp_yeast_seo_org_score_for_site();
 	$tip      = 'ok' === $score['state'] && $score['result']['score'] < 100 ? ( $score['result']['tips'][0] ?? null ) : null;
+	$score_total  = 'ok' === $score['state'] ? count( $score['result']['checks'] ) : 0;
+	$score_filled = 'ok' === $score['state'] ? count( wp_list_filter( $score['result']['checks'], array( 'status' => 'pass' ) ) ) : 0;
 	$pending  = get_transient( lcp_yeast_seo_ie_pending_key() );
 	$hidden   = ! get_option( 'blog_public' );
 
@@ -138,6 +140,10 @@ function lcp_yeast_seo_render_dashboard_widget() {
 				<?php if ( ! $totals['checked'] ) : ?>
 					<p>The site has not been scanned yet. <a href="<?php echo esc_url( lcp_yeast_seo_widget_tab_url( 'health' ) ); ?>">Scan it now</a>.</p>
 				<?php else : ?>
+					<div class="lcp-ys-dw__lead">
+						<?php echo lcp_yeast_seo_health_jar( $totals['total'] ? (int) round( 100 * $totals['ok'] / $totals['total'] ) : 0, false, $totals['ok'] . ' of ' . $totals['total'] . ' pages are healthy' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- built with escaped values. ?>
+						<p><strong><?php echo esc_html( $totals['ok'] . ' of ' . $totals['total'] . ' pages are healthy' ); ?></strong></p>
+					</div>
 					<ul class="lcp-ys-tally">
 						<li class="lcp-ys-chip lcp-ys-chip--<?php echo $totals['ok'] ? 'ok' : 'neutral'; ?>"><?php echo esc_html( $totals['ok'] . ' healthy' ); ?></li>
 						<li class="lcp-ys-chip lcp-ys-chip--<?php echo $totals['warning'] ? 'warn' : 'neutral'; ?>"><?php echo esc_html( $totals['warning'] . ' with warnings' ); ?></li>
@@ -149,6 +155,7 @@ function lcp_yeast_seo_render_dashboard_widget() {
 						<ul class="lcp-ys-dw__list">
 							<?php foreach ( $problems as $problem ) : ?>
 								<li class="lcp-ys-dw__item lcp-ys-dw__item--<?php echo esc_attr( $problem['level'] ); ?>">
+									<strong>Fix first:</strong>
 									<a href="<?php echo esc_url( add_query_arg( 'problem', $problem['code'], lcp_yeast_seo_widget_tab_url( 'health' ) ) ); ?>"><?php echo esc_html( mb_strimwidth( $problem['message'], 0, 90, '...' ) ); ?></a>
 									<span><?php echo esc_html( lcp_yeast_seo_count_noun( $problem['pages'], 'page' ) ); ?></span>
 								</li>
@@ -168,17 +175,17 @@ function lcp_yeast_seo_render_dashboard_widget() {
 
 		<?php if ( $tip ) : ?>
 			<section class="lcp-ys-dw__block">
-				<h3>Organization schema: <?php echo esc_html( $score['result']['score'] ); ?> out of 100</h3>
+				<h3>Organization details: <?php echo (int) $score_filled; ?> of <?php echo (int) $score_total; ?> filled in</h3>
 				<p><strong><?php echo esc_html( $tip['label'] ); ?>.</strong> <?php echo esc_html( wp_trim_words( $tip['tip'], 24 ) ); ?> <a href="<?php echo esc_url( lcp_yeast_seo_widget_tab_url( 'schema' ) ); ?>">Open the wizard</a></p>
 			</section>
 		<?php elseif ( 'ok' === $score['state'] ) : ?>
 			<section class="lcp-ys-dw__block">
-				<h3>Organization schema: <?php echo esc_html( $score['result']['score'] ); ?> out of 100</h3>
+				<h3>Organization details: <?php echo (int) $score_filled; ?> of <?php echo (int) $score_total; ?> filled in</h3>
 				<p>Nothing to add.</p>
 			</section>
 		<?php else : ?>
 			<section class="lcp-ys-dw__block">
-				<h3>Organization schema</h3>
+				<h3>Organization details</h3>
 				<p><?php echo esc_html( $score['message'] ); ?> <a href="<?php echo esc_url( lcp_yeast_seo_widget_tab_url( 'schema' ) ); ?>">Open Schema</a></p>
 			</section>
 		<?php endif; ?>

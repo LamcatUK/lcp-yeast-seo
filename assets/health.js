@@ -16,7 +16,7 @@
 	var status = root.querySelector( '[data-health-status]' );
 	var running = false;
 
-	function post( ids ) {
+	function post( ids, baseline ) {
 		var body = new URLSearchParams();
 		var controller = typeof AbortController === 'function' ? new AbortController() : null;
 		var timer = controller ? setTimeout( function () {
@@ -25,6 +25,11 @@
 
 		body.append( 'action', 'lcp_yeast_seo_health_check' );
 		body.append( '_ajax_nonce', config.nonce );
+
+		if ( baseline ) {
+			body.append( 'baseline', '1' );
+		}
+
 		ids.forEach( function ( id ) {
 			body.append( 'ids[]', id );
 		} );
@@ -199,7 +204,7 @@
 		progress.hidden = ! busy && ! status.textContent;
 	}
 
-	function scan( idList ) {
+	function scan( idList, full ) {
 		if ( running || ! idList.length ) {
 			return;
 		}
@@ -210,6 +215,7 @@
 		var skipped = 0;
 		var failures = 0;
 		var oneAtATime = false;
+		var markBaseline = !! full;
 
 		setBusy( true );
 		progress.hidden = false;
@@ -237,7 +243,11 @@
 
 			status.textContent = 'Checking pages ' + ( finished + 1 ) + ' to ' + ( finished + batch.length ) + ' of ' + total + '.' + ( oneAtATime ? ' The site is slow to answer, so pages are checked one at a time.' : '' );
 
-			post( batch )
+			var asBaseline = markBaseline;
+
+			markBaseline = false;
+
+			post( batch, asBaseline )
 				.then( function ( done ) {
 					failures = 0;
 					queue = batch.filter( function ( id ) {
@@ -271,7 +281,7 @@
 	}
 
 	scanButton.addEventListener( 'click', function () {
-		scan( config.ids );
+		scan( config.ids, true );
 	} );
 
 	linksButton.addEventListener( 'click', function () {

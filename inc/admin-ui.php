@@ -59,13 +59,13 @@ function lcp_yeast_seo_header_chips() {
 	$chips = array();
 
 	$chips[] = lcp_yeast_seo_schema_enabled() ? array( 'Schema on', 'ok' ) : array( 'Schema off', 'warn' );
-	$chips[] = lcp_yeast_seo_sitemaps_enabled() ? array( 'Sitemaps on', 'ok' ) : array( 'Sitemaps off', 'warn' );
-	$chips[] = get_option( 'blog_public' ) ? array( 'Open to search engines', 'ok' ) : array( 'Hidden from search engines', 'warn' );
+	$chips[] = lcp_yeast_seo_sitemaps_enabled() ? array( 'Sitemap on', 'ok' ) : array( 'Sitemap off', 'warn' );
+	$chips[] = get_option( 'blog_public' ) ? array( 'Search engines allowed', 'ok' ) : array( 'Hidden from search engines', 'warn' );
 
 	if ( is_file( lcp_yeast_seo_robots_file_path() ) ) {
-		$chips[] = array( 'Physical robots.txt in use', 'neutral' );
+		$chips[] = array( 'robots.txt is a file on the server', 'neutral' );
 	} elseif ( '' !== trim( (string) lcp_yeast_seo_get_setting( 'robots_txt', '' ) ) ) {
-		$chips[] = array( 'Custom robots.txt', 'neutral' );
+		$chips[] = array( 'robots.txt edited', 'neutral' );
 	}
 
 	return $chips;
@@ -81,29 +81,13 @@ function lcp_yeast_seo_header_chips() {
  * @return void
  */
 function lcp_yeast_seo_render_admin_header( array $tabs, $active, $js_tabs, $tab_url ) {
-	$bubbles = array(
-		array( 6, 22, 0.00 ),
-		array( 13, 12, 0.18 ),
-		array( 21, 30, 0.08 ),
-		array( 33, 16, 0.30 ),
-		array( 47, 26, 0.12 ),
-		array( 58, 10, 0.36 ),
-		array( 69, 34, 0.04 ),
-		array( 78, 14, 0.24 ),
-		array( 88, 24, 0.16 ),
-		array( 95, 12, 0.40 ),
-	);
 	?>
 	<header class="lcp-ys-header">
-		<div class="lcp-ys-bubbles" aria-hidden="true">
-			<?php foreach ( $bubbles as $bubble ) : ?>
-				<span style="--x:<?php echo (int) $bubble[0]; ?>%;--s:<?php echo (int) $bubble[1]; ?>px;--d:<?php echo esc_attr( $bubble[2] ); ?>s"></span>
-			<?php endforeach; ?>
-		</div>
 		<div class="lcp-ys-header__main">
 			<div class="lcp-ys-brand">
-				<h1>Yeast SEO</h1>
-				<span class="lcp-ys-version">v<?php echo esc_html( LCP_YEAST_SEO_VERSION ); ?></span>
+				<?php echo lcp_yeast_seo_brand_mark( '#d9a21b', '#ffffff', 'lcp-ys-mark' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- built from fixed shapes and escaped attributes. ?>
+				<h1>Yeast <span>SEO</span></h1>
+				<span class="lcp-ys-version"><?php echo esc_html( LCP_YEAST_SEO_VERSION ); ?></span>
 			</div>
 			<ul class="lcp-ys-chips" aria-label="Site status">
 				<?php foreach ( lcp_yeast_seo_header_chips() as $chip ) : ?>
@@ -117,6 +101,7 @@ function lcp_yeast_seo_render_admin_header( array $tabs, $active, $js_tabs, $tab
 			<?php endforeach; ?>
 			<a href="<?php echo esc_url( $tab_url( 'health' ) ); ?>" class="nav-tab<?php echo 'health' === $active ? ' nav-tab-active' : ''; ?>">Health</a>
 			<a href="<?php echo esc_url( $tab_url( 'import-export' ) ); ?>" class="nav-tab<?php echo 'import-export' === $active ? ' nav-tab-active' : ''; ?>">Import / Export</a>
+			<a href="<?php echo esc_url( $tab_url( 'about' ) ); ?>" class="nav-tab<?php echo 'about' === $active ? ' nav-tab-active' : ''; ?>">About</a>
 		</nav>
 	</header>
 	<hr class="wp-header-end">
@@ -164,8 +149,9 @@ function lcp_yeast_seo_render_sections( $page ) {
  * @param string $label Accessible description.
  * @return string SVG markup.
  */
-function lcp_yeast_seo_health_jar( $percent, $animate, $label ) {
+function lcp_yeast_seo_health_jar( $percent, $animate, $label, $band = null ) {
 	$percent = max( 0, min( 100, (int) $percent ) );
+	$band_y  = null === $band ? null : 40 + ( 1 - max( 0, min( 100, (int) $band ) ) / 100 ) * 104;
 	$bubbles = $percent > 8 ? array( array( 44, 118, 3.2, 0 ), array( 62, 104, 2.4, 1 ), array( 76, 124, 3.6, 2 ), array( 54, 92, 2, 3 ) ) : array();
 
 	ob_start();
@@ -185,6 +171,9 @@ function lcp_yeast_seo_health_jar( $percent, $animate, $label ) {
 			</g>
 		</g>
 		<path class="lcp-ys-jar__outline" d="M32 30H88V38C98 46 100 54 100 66V128C100 138 94 144 84 144H36C26 144 20 138 20 128V66C20 54 22 46 32 38Z"/>
+		<?php if ( null !== $band_y ) : ?>
+			<rect class="lcp-ys-jar__band" x="17" y="<?php echo esc_attr( round( $band_y - 1.5, 1 ) ); ?>" width="86" height="3" rx="1.5"/>
+		<?php endif; ?>
 		<rect class="lcp-ys-jar__lid" x="28" y="18" width="64" height="12" rx="3"/>
 		<path class="lcp-ys-jar__ticks" d="M20 70H28M20 90H26M20 110H28M20 130H26"/>
 	</svg>
@@ -232,6 +221,8 @@ function lcp_yeast_seo_health_render_summary( $animate = false ) {
 	$totals  = lcp_yeast_seo_health_totals( $ids, $results );
 	$percent = $totals['checked'] ? (int) round( 100 * $totals['ok'] / max( 1, $totals['total'] ) ) : 0;
 	$last    = $totals['checked'] ? max( array_column( array_intersect_key( $results, array_flip( $ids ) ), 'time' ) ) : 0;
+	$band    = get_option( LCP_YEAST_SEO_HEALTH_BASELINE_OPTION, null );
+	$band    = $totals['checked'] && is_numeric( $band ) ? (int) $band : null;
 
 	if ( ! $totals['checked'] ) {
 		$headline = 'No scan yet';
@@ -251,12 +242,13 @@ function lcp_yeast_seo_health_render_summary( $animate = false ) {
 
 		$detail = ( $parts ? ucfirst( implode( ' and ', $parts ) ) . '. ' : 'Nothing needs fixing. ' )
 			. ( $totals['checked'] < $totals['total'] ? ( $totals['total'] - $totals['checked'] ) . ' not checked yet. ' : '' )
-			. 'Last checked ' . human_time_diff( $last ) . ' ago.';
-		$label    = $totals['ok'] . ' of ' . $totals['total'] . ' pages are healthy';
+			. 'Last checked ' . human_time_diff( $last ) . ' ago.'
+			. ( null !== $band && $band !== $percent ? ' The band on the jar marks where it stood before that scan (' . $band . '%).' : '' );
+		$label    = $totals['ok'] . ' of ' . $totals['total'] . ' pages are healthy' . ( null !== $band ? '; before the last scan, ' . $band . '%' : '' );
 	}
 	?>
 	<div class="lcp-ys-summary">
-		<?php echo lcp_yeast_seo_health_jar( $percent, $animate, $label ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- built above with escaped values. ?>
+		<?php echo lcp_yeast_seo_health_jar( $percent, $animate, $label, $band ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- built above with escaped values. ?>
 		<div class="lcp-ys-summary__text">
 			<p class="lcp-ys-summary__headline"><?php echo esc_html( $headline ); ?></p>
 			<p class="lcp-ys-summary__detail"><?php echo esc_html( $detail ); ?></p>

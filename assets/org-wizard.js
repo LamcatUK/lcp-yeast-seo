@@ -13,24 +13,45 @@
 	var next = root.querySelector( '[data-wizard-next]' );
 	var save = root.querySelector( '[data-wizard-save]' );
 	var position = root.querySelector( '[data-wizard-position]' );
+	var title = root.querySelector( '[data-wizard-title]' );
+	var intro = root.querySelector( '[data-wizard-intro]' );
+	var visited = [];
 	var review = root.querySelector( '[data-wizard-review]' );
 	var current = 0;
 	var last = steps.length - 1;
 
 	function show( index ) {
+		var previous = current;
+
 		current = Math.max( 0, Math.min( last, index ) );
 
 		steps.forEach( function ( step, i ) {
 			step.hidden = i !== current;
 		} );
+		if ( visited.indexOf( previous ) < 0 && previous !== current && previous < last ) {
+			visited.push( previous );
+		}
+
 		tabs.forEach( function ( tab, i ) {
+			var done = i !== current && visited.indexOf( i ) >= 0;
+			var glyph = tab.querySelector( '.lcp-ys-wiz__glyph' );
+
 			tab.classList.toggle( 'is-current', i === current );
-			tab.classList.toggle( 'is-done', i < current );
+			tab.classList.toggle( 'is-done', done );
+			glyph.textContent = done ? '\u2713' : String( i + 1 );
+
+			if ( i === current ) {
+				tab.setAttribute( 'aria-current', 'step' );
+			} else {
+				tab.removeAttribute( 'aria-current' );
+			}
 		} );
-		back.hidden = 0 === current;
+		back.style.visibility = 0 === current ? 'hidden' : 'visible';
 		next.hidden = current === last;
 		save.hidden = true;
 		position.textContent = 'Step ' + ( current + 1 ) + ' of ' + steps.length;
+		title.textContent = steps[ current ].getAttribute( 'data-title' ) || '';
+		intro.textContent = steps[ current ].getAttribute( 'data-intro' ) || '';
 
 		if ( current === last ) {
 			loadPreview();
@@ -83,7 +104,7 @@
 
 				data = result.data;
 				review.textContent = '';
-				review.appendChild( element( 'p', ( null === data.before ? 'New schema. ' : 'Score: ' + data.before + ' to ' ) + ( null === data.before ? 'Score ' : '' ) + data.after + ' out of 100.', 'lcp-ys-wiz__score' ) );
+				review.appendChild( element( 'p', null === data.before ? 'New schema. Score ' + data.after + ' out of 100.' : ( data.before === data.after ? 'Score stays at ' + data.after + ' out of 100.' : 'Score: ' + data.before + ' to ' + data.after + ' out of 100.' ), 'lcp-ys-wiz__score' ) );
 
 				if ( data.switches ) {
 					review.appendChild( element( 'p', 'Saving moves your details from the form fields into the JSON-LD source.', 'description' ) );
@@ -120,6 +141,12 @@
 				review.appendChild( element( 'p', error.message, 'lcp-ys-wiz__error' ) );
 			} );
 	}
+
+	tabs.forEach( function ( tab, i ) {
+		tab.addEventListener( 'click', function () {
+			show( i );
+		} );
+	} );
 
 	back.addEventListener( 'click', function () {
 		show( current - 1 );

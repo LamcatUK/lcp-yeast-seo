@@ -303,3 +303,11 @@
 		remove.hidden = true;
 	} );
 }() );
+
+( function () {
+	var active = document.querySelector( '.lcp-ys .nav-tab-active' );
+
+	if ( active && active.parentNode && active.parentNode.scrollWidth > active.parentNode.clientWidth ) {
+		active.parentNode.scrollLeft = active.offsetLeft - 16;
+	}
+}() );

@@ -458,10 +458,10 @@ function lcp_yeast_seo_render_org_score_field() {
 	} );
 	?>
 	<div class="lcp-ys-score">
-		<div class="lcp-ys-score__num" aria-label="<?php echo esc_attr( $result['score'] . ' out of 100' ); ?>"><strong><?php echo (int) $result['score']; ?></strong><span>/ 100</span></div>
+		<div class="lcp-ys-score__num" aria-label="<?php echo esc_attr( count( $done ) . ' of ' . count( $result['checks'] ) . ' details filled in. Score ' . $result['score'] . ' out of 100.' ); ?>"><strong><?php echo (int) count( $done ); ?></strong><span>of <?php echo (int) count( $result['checks'] ); ?> filled in</span></div>
 		<div class="lcp-ys-score__detail">
 			<p><span class="lcp-ys-chip lcp-ys-chip--<?php echo esc_attr( $chip ); ?>"><?php echo esc_html( $result['grade'] ); ?></span>
-				<span class="lcp-ys-audit__found"><?php echo esc_html( implode( ', ', lcp_yeast_seo_org_types( lcp_yeast_seo_org_score_for_site_type() ) ) ); ?><?php echo $result['local'] ? ', scored as a local business' : ''; ?></span></p>
+				<span class="lcp-ys-audit__found"><?php echo esc_html( 'Score ' . $result['score'] . ' out of 100. ' . implode( ', ', lcp_yeast_seo_org_types( lcp_yeast_seo_org_score_for_site_type() ) ) ); ?><?php echo $result['local'] ? ', scored as a local business' : ''; ?></span></p>
 			<ul class="lcp-ys-bars">
 				<?php foreach ( $result['groups'] as $group ) : ?>
 					<li><span><?php echo esc_html( $group['label'] ); ?></span><i class="lcp-ys-bar"><b style="width:<?php echo (int) $group['score']; ?>%"></b></i><em><?php echo (int) $group['score']; ?></em></li>
@@ -470,7 +470,7 @@ function lcp_yeast_seo_render_org_score_field() {
 		</div>
 	</div>
 	<?php if ( $open ) : ?>
-		<h3 class="lcp-ys-audit__title">How to improve it</h3>
+		<h3 class="lcp-ys-audit__title">Still missing</h3>
 		<ul class="lcp-ys-audit">
 			<?php
 			foreach ( $result['tips'] as $check ) {
@@ -483,7 +483,7 @@ function lcp_yeast_seo_render_org_score_field() {
 	<?php endif; ?>
 	<?php if ( $done ) : ?>
 		<details class="lcp-ys-audit__done">
-			<summary><?php echo esc_html( 'Already right (' . count( $done ) . ')' ); ?></summary>
+			<summary><?php echo esc_html( 'Filled in (' . count( $done ) . ')' ); ?></summary>
 			<ul class="lcp-ys-audit">
 				<?php
 				foreach ( $done as $check ) {

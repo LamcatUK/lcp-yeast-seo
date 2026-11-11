@@ -345,7 +345,7 @@ function lcp_yeast_seo_register_settings_page() {
 		'manage_options',
 		'lcp-yeast-seo',
 		'lcp_yeast_seo_render_settings_page',
-		'dashicons-search',
+		lcp_yeast_seo_menu_icon(),
 		80
 	);
 
@@ -832,7 +832,7 @@ function lcp_yeast_seo_render_settings_page() {
 	);
 	// phpcs:ignore WordPress.Security.NonceVerification.Recommended
 	$requested = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : 'general';
-	$is_tool   = in_array( $requested, array( 'health', 'import-export' ), true );
+	$is_tool   = in_array( $requested, array( 'health', 'import-export', 'about' ), true );
 	$active    = $is_tool ? $requested : ( isset( $tabs[ $requested ] ) ? $requested : 'general' );
 	$tab_url   = static function ( $slug ) {
 		return add_query_arg( array( 'page' => 'lcp-yeast-seo', 'tab' => $slug ), admin_url( 'admin.php' ) );
@@ -845,6 +845,8 @@ function lcp_yeast_seo_render_settings_page() {
 			<?php lcp_yeast_seo_health_render_tab(); ?>
 		<?php elseif ( 'import-export' === $active ) : ?>
 			<?php lcp_yeast_seo_ie_render_tab(); ?>
+		<?php elseif ( 'about' === $active ) : ?>
+			<?php lcp_yeast_seo_render_about_tab(); ?>
 		<?php else : ?>
 			<form action="options.php" method="post">
 				<?php settings_fields( 'lcp_yeast_seo_settings' ); ?>

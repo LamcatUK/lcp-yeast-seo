@@ -3,7 +3,7 @@ Tags: seo, schema, sitemap, meta description, open graph
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 0.22.0
+Stable tag: 0.23.0
 
 Per-post SEO controls for titles, descriptions, social tags, canonical URLs and schema, with XML sitemaps. Built to replace Yoast one feature at a time.
 
@@ -33,6 +33,14 @@ After every deploy, run the smoke test against the live site. It checks the site
     LCP_SMOKE_URL=https://example.com LCP_SMOKE_ARCHIVE=/guides/ composer test:smoke
 
 == Changelog ==
+
+= 0.23.0 =
+* New: Yeast SEO brand. The starter-jar mark now appears in the header and as the admin menu icon (one colour, so it follows your admin colour scheme). The header band loses its floating bubbles, the version is plain text, status chips say what they mean ("Search engines allowed", "robots.txt edited"), and the active tab has a crust-coloured line. Headings use the Young Serif display face where it is installed (falls back to Georgia).
+* New: an About tab, last in the row, with the story behind the name and a plain list of what the plugin looks after.
+* New: the Organization wizard is a vertical list of steps with ticks on the ones you have done. Every step is clickable, each opens with one sentence on why it matters, and the step count is in words. On narrow screens the list collapses to "Step 3 of 6". Next is now Continue.
+* New: the health jar shows a band at the level it stood before the last full scan, so you can see how far it rose.
+* New: the Organization card reports "10 of 14 filled in" with a "Still missing" list. The dashboard widget leads with a small jar, one "Fix first" item and the same count.
+* Changed: colours collapse into named tokens (ink, leaf, crust and the status pairs); five near-identical greys, three reds and three golds are gone. Focus rings are leaf on light backgrounds and crust on the header. At 782px and below the header runs full width, chips and tabs scroll sideways, and buttons and fields are 40px tall.
 
 = 0.22.0 =
 * New: a Yeast SEO widget on the WordPress dashboard (administrators only). It shows a warning if the site is set to discourage search engines, the last health scan's totals and the problems that affect the most pages (each links to the filtered Health tab), the Organization schema score with its single most valuable fix, how many pages can be indexed, and an import file waiting to be applied, with Apply and Cancel. It only reads stored results, so it never slows the dashboard, and it collapses to one line when nothing needs attention.

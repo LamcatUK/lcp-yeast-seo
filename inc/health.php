@@ -10,6 +10,7 @@
 defined( 'ABSPATH' ) || exit;
 
 define( 'LCP_YEAST_SEO_HEALTH_OPTION', 'lcp_yeast_seo_health' );
+define( 'LCP_YEAST_SEO_HEALTH_BASELINE_OPTION', 'lcp_yeast_seo_health_baseline' );
 define( 'LCP_YEAST_SEO_HEALTH_BATCH', 3 );
 define( 'LCP_YEAST_SEO_HEALTH_PAGE_TIMEOUT', 12 );
 define( 'LCP_YEAST_SEO_HEALTH_BUDGET', 20 );
@@ -984,6 +985,19 @@ function lcp_yeast_seo_health_check_post( $post_id ) {
 }
 
 /**
+ * The share of pages with no problems, as a whole number, or null when nothing has been checked.
+ *
+ * @param int[]   $ids     Page IDs in the scan.
+ * @param array[] $results Stored results.
+ * @return int|null
+ */
+function lcp_yeast_seo_health_healthy_percent( array $ids, array $results ) {
+	$totals = lcp_yeast_seo_health_totals( $ids, lcp_yeast_seo_health_effective( $ids, $results ) );
+
+	return $totals['checked'] ? (int) round( 100 * $totals['ok'] / max( 1, $totals['total'] ) ) : null;
+}
+
+/**
  * Stored results, keyed by post ID.
  *
  * @return array
@@ -1012,6 +1026,15 @@ function lcp_yeast_seo_health_ajax_check() {
 	$ids     = isset( $_POST['ids'] ) ? array_slice( array_map( 'absint', (array) wp_unslash( $_POST['ids'] ) ), 0, LCP_YEAST_SEO_HEALTH_BATCH ) : array();
 	$allowed = lcp_yeast_seo_health_page_ids();
 	$results = lcp_yeast_seo_health_results();
+
+	// A full scan marks where the jar stood before it, so the next view shows how far it rose.
+	if ( ! empty( $_POST['baseline'] ) ) {
+		$before = lcp_yeast_seo_health_healthy_percent( lcp_yeast_seo_health_page_ids(), $results );
+
+		if ( null !== $before ) {
+			update_option( LCP_YEAST_SEO_HEALTH_BASELINE_OPTION, $before, false );
+		}
+	}
 
 	$started = microtime( true );
 	$done    = array();
