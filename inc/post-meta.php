@@ -868,6 +868,26 @@ add_filter(
 );
 
 /**
+ * The Open Graph type of the current view: "article" for posts, "website" for everything else.
+ *
+ * @param string $post_type    Post type of the current post.
+ * @param bool   $is_singular  Whether a single post or page is being shown.
+ * @param bool   $is_front     Whether it is the front page.
+ * @return string
+ */
+function lcp_yeast_seo_og_type( $post_type, $is_singular, $is_front ) {
+	// Only a piece of written content is an "article". The front page is the site itself, the
+	// blog index is a listing, and a service or contact page is a plain page: all are "website".
+	if ( ! $is_singular || $is_front ) {
+		return 'website';
+	}
+
+	$article_types = (array) apply_filters( 'lcp_yeast_seo_auto_schema_article_types', array( 'post' => 'BlogPosting' ) );
+
+	return isset( $article_types[ $post_type ] ) ? 'article' : 'website';
+}
+
+/**
  * Outputs the plugin's meta tags when Yoast is not handling them.
  *
  * @return void
@@ -887,10 +907,7 @@ function lcp_yeast_seo_render_frontend_meta() {
 	$site_name    = get_bloginfo( 'name' );
 	$twitter_site = lcp_yeast_seo_get_setting( 'twitter_site', '' );
 	$card_type    = $twitter_image ? 'summary_large_image' : 'summary';
-	// The posts page shown as the blog index is a listing, and the front
-	// page is the site itself, not a single piece of content — "article"
-	// would misdescribe either to OG consumers.
-	$og_type      = is_singular() && ! is_front_page() ? 'article' : 'website';
+	$og_type      = lcp_yeast_seo_og_type( (string) get_post_type( $post_id ), is_singular(), is_front_page() );
 
 	if ( '' !== $meta_description ) {
 		echo '<meta name="description" content="' . esc_attr( $meta_description ) . '">' . "\n";
@@ -917,8 +934,7 @@ function lcp_yeast_seo_render_frontend_meta() {
 		echo '<meta property="og:image" content="' . esc_url( $og_image ) . '">' . "\n";
 	}
 
-	// Dates for article-type pages (posts and pages alike, matching og:type
-	// above). Skipped for the front page / blog index, which report "website".
+	// Dates for articles only: pages, the front page and the blog index report "website".
 	if ( 'article' === $og_type && $post_id ) {
 		echo '<meta property="article:published_time" content="' . esc_attr( get_post_time( 'c', true, $post_id ) ) . '">' . "\n";
 		echo '<meta property="article:modified_time" content="' . esc_attr( get_post_modified_time( 'c', true, $post_id ) ) . '">' . "\n";

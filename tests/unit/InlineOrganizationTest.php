@@ -5,8 +5,52 @@ class InlineOrganizationTest extends TestCase {
 
 	private const ID = 'https://example.test/#organization';
 
+	private const ORG = array(
+		'@type' => 'LocalBusiness',
+		'@id'   => self::ID,
+		'name'  => 'Tidy Solutions',
+		'url'   => 'https://example.test/',
+		'phone' => '01624 000000',
+	);
+
+	protected function setUp(): void {
+		parent::setUp();
+
+		\Brain\Monkey\Functions\when( 'wp_json_encode' )->alias( 'json_encode' );
+		\Brain\Monkey\Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+	}
+
 	private function link( array $node ) {
-		return lcp_yeast_seo_link_inline_organization( $node, self::ID, array( 'Tidy Solutions' ), array( 'https://example.test/' ) );
+		return lcp_yeast_seo_link_inline_organization( $node, self::ID, array( 'Tidy Solutions' ), array( 'https://example.test/' ), self::ORG );
+	}
+
+	public function test_a_provider_that_repeats_the_organization_becomes_a_reference() {
+		$service = $this->link(
+			array(
+				'@type'    => 'Service',
+				'provider' => array( '@type' => 'LocalBusiness', '@id' => self::ID, 'name' => 'Tidy Solutions', 'url' => 'https://example.test/' ),
+			)
+		);
+
+		$this->assertSame( array( '@id' => self::ID ), $service['provider'] );
+	}
+
+	public function test_a_provider_from_another_host_with_the_same_fragment_still_counts() {
+		$service = $this->link( array( '@type' => 'Service', 'provider' => array( '@type' => 'LocalBusiness', '@id' => 'http://tidynew.local/#organization', 'name' => 'Tidy Solutions' ) ) );
+
+		$this->assertSame( array( '@id' => self::ID ), $service['provider'] );
+	}
+
+	public function test_a_provider_that_says_more_than_the_organization_is_kept() {
+		$provider = array( '@type' => 'LocalBusiness', '@id' => self::ID, 'name' => 'Tidy Solutions', 'slogan' => 'We take it away' );
+
+		$this->assertSame( $provider, $this->link( array( '@type' => 'Service', 'provider' => $provider ) )['provider'] );
+	}
+
+	public function test_a_provider_that_disagrees_with_the_organization_is_kept() {
+		$provider = array( '@type' => 'LocalBusiness', '@id' => self::ID, 'name' => 'A Different Name' );
+
+		$this->assertSame( $provider, $this->link( array( '@type' => 'Service', 'provider' => $provider ) )['provider'] );
 	}
 
 	public function test_an_inline_copy_of_the_business_becomes_a_reference() {

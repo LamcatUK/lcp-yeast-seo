@@ -148,6 +148,8 @@ function lcp_yeast_seo_build_auto_graph( array $ctx ) {
 	$image_id      = $url . '#primaryimage';
 	$crumbs        = array_values( (array) ( $page['breadcrumbs'] ?? array() ) );
 	$want_crumbs   = count( $crumbs ) >= 2 && ! $has( 'breadcrumb' );
+	// A breadcrumb the theme prints counts too, when it carries the id this plugin would have used.
+	$crumbs_theirs = ! in_array( 'breadcrumb', $disabled, true ) && in_array( $breadcrumb_id, (array) ( $ctx['declared_ids'] ?? array() ), true );
 	$emit_webpage  = ! $has( 'webpage' );
 	$article_type  = (string) ( $page['article_type'] ?? '' );
 	$emit_article  = '' !== $article_type && ! $has( 'article' );
@@ -177,7 +179,7 @@ function lcp_yeast_seo_build_auto_graph( array $ctx ) {
 			$webpage['primaryImageOfPage'] = array( '@id' => $image_id );
 		}
 
-		if ( $want_crumbs ) {
+		if ( $want_crumbs || $crumbs_theirs ) {
 			$webpage['breadcrumb'] = array( '@id' => $breadcrumb_id );
 		}
 
@@ -198,6 +200,30 @@ function lcp_yeast_seo_build_auto_graph( array $ctx ) {
 		}
 
 		$nodes[] = $webpage;
+	} elseif ( ! in_array( 'webpage', $disabled, true ) && ! empty( $ctx['declared_webpage']['@id'] ) ) {
+		// The page's own schema describes the page (a ContactPage, say) but not how it fits the site.
+		// A node with the same @id merges with it, so add only the links it lacks.
+		$own  = $ctx['declared_webpage'];
+		$link = array();
+
+		if ( empty( $own['isPartOf'] ) && ! $has( 'website' ) ) {
+			$link['isPartOf'] = array( '@id' => $website_id );
+		}
+
+		if ( empty( $own['breadcrumb'] ) && ( $want_crumbs || $crumbs_theirs ) ) {
+			$link['breadcrumb'] = array( '@id' => $breadcrumb_id );
+		}
+
+		if ( empty( $own['inLanguage'] ) && '' !== (string) $ctx['language'] ) {
+			$link['inLanguage'] = $ctx['language'];
+		}
+
+		if ( $link ) {
+			$nodes[] = array(
+				'@type' => $own['@type'],
+				'@id'   => $own['@id'],
+			) + $link;
+		}
 	}
 
 	if ( $emit_article ) {
@@ -575,15 +601,30 @@ function lcp_yeast_seo_auto_schema_context() {
 	return $ctx;
 }
 
-/**
- * Schema.org types present in a finished page: JSON-LD entities (top level or
- * in an @graph) and microdata itemtypes, from any source.
- *
- * @param string $html Page HTML.
- * @return string[]
- */
 function lcp_yeast_seo_detect_schema_types( $html ) {
 	$types = array();
+
+	foreach ( lcp_yeast_seo_schema_entities( $html ) as $entity ) {
+		if ( ! empty( $entity['@type'] ) ) {
+			$types = array_merge( $types, array_map( 'strval', (array) $entity['@type'] ) );
+		}
+	}
+
+	if ( preg_match_all( '#\bitemtype\s*=\s*["\']https?://schema\.org/([A-Za-z]+)["\']#i', (string) $html, $microdata ) ) {
+		$types = array_merge( $types, $microdata[1] );
+	}
+
+	return array_values( array_unique( $types ) );
+}
+
+/**
+ * The top-level JSON-LD entities in a finished page (a single entity, a list, or an @graph), from any source.
+ *
+ * @param string $html Page HTML.
+ * @return array[]
+ */
+function lcp_yeast_seo_schema_entities( $html ) {
+	$found = array();
 
 	if ( preg_match_all( '#<script\b[^>]*\btype\s*=\s*["\']application/ld\+json["\'][^>]*>(.*?)</script>#is', (string) $html, $scripts ) ) {
 		foreach ( $scripts[1] as $json ) {
@@ -596,18 +637,49 @@ function lcp_yeast_seo_detect_schema_types( $html ) {
 			$entities = isset( $data['@graph'] ) && is_array( $data['@graph'] ) ? $data['@graph'] : ( isset( $data['@type'] ) ? array( $data ) : $data );
 
 			foreach ( $entities as $entity ) {
-				if ( is_array( $entity ) && ! empty( $entity['@type'] ) ) {
-					$types = array_merge( $types, array_map( 'strval', (array) $entity['@type'] ) );
+				if ( is_array( $entity ) ) {
+					$found[] = $entity;
 				}
 			}
 		}
 	}
 
-	if ( preg_match_all( '#\bitemtype\s*=\s*["\']https?://schema\.org/([A-Za-z]+)["\']#i', (string) $html, $microdata ) ) {
-		$types = array_merge( $types, $microdata[1] );
+	return $found;
+}
+
+/**
+ * The @ids of the JSON-LD entities in a finished page.
+ *
+ * @param string $html Page HTML.
+ * @return string[]
+ */
+function lcp_yeast_seo_detect_schema_ids( $html ) {
+	$ids = array();
+
+	foreach ( lcp_yeast_seo_schema_entities( $html ) as $entity ) {
+		if ( ! empty( $entity['@id'] ) && is_string( $entity['@id'] ) ) {
+			$ids[] = $entity['@id'];
+		}
 	}
 
-	return array_values( array_unique( $types ) );
+	return array_values( array_unique( $ids ) );
+}
+
+/**
+ * The page's own page-type node (WebPage, ContactPage and so on) when it has an @id: the one
+ * the automatic graph can add links to.
+ *
+ * @param array[] $entities Entities from the page.
+ * @return array|null
+ */
+function lcp_yeast_seo_declared_webpage( array $entities ) {
+	foreach ( $entities as $entity ) {
+		if ( ! empty( $entity['@id'] ) && ! empty( $entity['@type'] ) && array_intersect( array_map( 'strval', (array) $entity['@type'] ), lcp_yeast_seo_auto_schema_type_groups()['webpage'] ) ) {
+			return $entity;
+		}
+	}
+
+	return null;
 }
 
 /**
@@ -659,7 +731,10 @@ function lcp_yeast_seo_inject_auto_schema( $html, array $ctx ) {
 			return $html;
 		}
 
+		$entities              = lcp_yeast_seo_schema_entities( $html );
 		$ctx['declared_types'] = array_values( array_unique( array_merge( (array) $ctx['declared_types'], lcp_yeast_seo_detect_schema_types( $html ) ) ) );
+		$ctx['declared_ids']   = lcp_yeast_seo_detect_schema_ids( $html );
+		$ctx['declared_webpage'] = lcp_yeast_seo_declared_webpage( $entities );
 		$script                = lcp_yeast_seo_auto_schema_script( $ctx );
 
 		return '' === $script ? $html : substr_replace( $html, $script, $position, 0 );

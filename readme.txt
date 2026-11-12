@@ -3,7 +3,7 @@ Tags: seo, schema, sitemap, meta description, open graph
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 0.23.1
+Stable tag: 0.23.2
 
 Per-post SEO controls for titles, descriptions, social tags, canonical URLs and schema, with XML sitemaps. Built to replace Yoast one feature at a time.
 
@@ -33,6 +33,12 @@ After every deploy, run the smoke test against the live site. It checks the site
     LCP_SMOKE_URL=https://example.com LCP_SMOKE_ARCHIVE=/guides/ composer test:smoke
 
 == Changelog ==
+
+= 0.23.2 =
+* Fix: the Open Graph type is "article" only for posts. Pages (services, contact and so on), the front page and the blog index report "website", and only articles carry the article published and modified times.
+* New: when a page's own schema describes the page (a ContactPage, say) without saying how it fits the site, the automatic graph adds the missing links by @id: `isPartOf` the WebSite, the `breadcrumb`, and `inLanguage`. Links the page already has are left alone.
+* New: the automatic WebPage links to a breadcrumb the theme prints, as long as the theme gives it the address Yeast SEO would have used (`{page}#breadcrumb`). A breadcrumb without that id is not linked, so nothing points at a missing node.
+* New: a business repeated inside a page's own schema (for example a Service's `provider`) is output as a reference to your Organization when it carries the Organization's @id and says nothing the Organization does not already say. If it says more, or disagrees, it is left as written.
 
 = 0.23.1 =
 * Fix: the Organization was only output on the pages chosen under Display on (by default the home page), so everywhere else the automatic WebSite had no `publisher`, a post's BlogPosting had no `publisher`, and a reference to `#organization` pointed at nothing on that page. With automatic structured data on, the Organization (built from your form fields or JSON-LD, as before) is now added to every page the automatic data is output on, so those references resolve. Display on now only matters when automatic data is off. With Yoast active nothing changes.

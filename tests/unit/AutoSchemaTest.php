@@ -262,6 +262,57 @@ class AutoSchemaTest extends TestCase {
 		$this->assertSame( 'Person', $this->node( lcp_yeast_seo_build_auto_graph( $ctx ), 'Article' )['author']['@type'] );
 	}
 
+	public function test_the_webpage_links_to_a_breadcrumb_the_theme_prints_with_the_expected_id() {
+		$ctx = $this->context(
+			array(
+				'declared_types' => array( 'BreadcrumbList' ),
+				'declared_ids'   => array( 'http://example.test/guides/a-post/#breadcrumb' ),
+			)
+		);
+
+		$this->assertSame( array( '@id' => 'http://example.test/guides/a-post/#breadcrumb' ), $this->node( lcp_yeast_seo_build_auto_graph( $ctx ), 'WebPage' )['breadcrumb'] );
+		$this->assertNull( $this->node( lcp_yeast_seo_build_auto_graph( $ctx ), 'BreadcrumbList' ), 'the theme\'s breadcrumb is not written twice' );
+	}
+
+	public function test_a_breadcrumb_without_that_id_is_not_linked() {
+		$ctx = $this->context( array( 'declared_types' => array( 'BreadcrumbList' ), 'declared_ids' => array() ) );
+
+		$this->assertArrayNotHasKey( 'breadcrumb', $this->node( lcp_yeast_seo_build_auto_graph( $ctx ), 'WebPage' ), 'a reference to nothing would be worse than none' );
+	}
+
+	public function test_a_page_declared_by_the_page_itself_gets_the_links_it_lacks() {
+		$ctx = $this->context(
+			array(
+				'declared_types'   => array( 'ContactPage' ),
+				'declared_webpage' => array( '@type' => 'ContactPage', '@id' => 'http://example.test/contact/#contactpage' ),
+			)
+		);
+
+		$stub = $this->node( lcp_yeast_seo_build_auto_graph( $ctx ), 'ContactPage' );
+
+		$this->assertSame( 'http://example.test/contact/#contactpage', $stub['@id'] );
+		$this->assertSame( array( '@id' => 'http://example.test/#website' ), $stub['isPartOf'] );
+		$this->assertSame( array( '@id' => 'http://example.test/guides/a-post/#breadcrumb' ), $stub['breadcrumb'] );
+		$this->assertSame( 'en-GB', $stub['inLanguage'] );
+	}
+
+	public function test_links_the_page_already_has_are_not_repeated() {
+		$ctx = $this->context(
+			array(
+				'declared_types'   => array( 'ContactPage' ),
+				'declared_webpage' => array(
+					'@type'      => 'ContactPage',
+					'@id'        => 'http://example.test/contact/#contactpage',
+					'isPartOf'   => array( '@id' => 'http://example.test/#website' ),
+					'breadcrumb' => array( '@id' => 'http://example.test/contact/#breadcrumb' ),
+					'inLanguage' => 'en-GB',
+				),
+			)
+		);
+
+		$this->assertNull( $this->node( lcp_yeast_seo_build_auto_graph( $ctx ), 'ContactPage' ) );
+	}
+
 	public function test_no_author_means_no_author_property() {
 		$ctx                   = $this->context();
 		$ctx['page']['author'] = null;

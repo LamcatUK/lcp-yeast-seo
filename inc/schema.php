@@ -362,7 +362,7 @@ function lcp_yeast_seo_render() {
 		$urls  = array( (string) ( $org['url'] ?? '' ), home_url( '/' ) );
 
 		foreach ( $nodes as $i => $node ) {
-			$nodes[ $i ] = lcp_yeast_seo_link_inline_organization( $node, lcp_yeast_seo_organization_id(), $names, $urls );
+			$nodes[ $i ] = lcp_yeast_seo_link_inline_organization( $node, lcp_yeast_seo_organization_id(), $names, $urls, $org );
 		}
 	}
 
@@ -504,21 +504,45 @@ function lcp_yeast_seo_inline_business_matches( array $business, array $names, a
 }
 
 /**
+ * Whether an inline copy of the Organization adds nothing the real node does not already say.
+ *
+ * @param array $copy The inline node.
+ * @param array $org  The site's Organization node.
+ * @return bool
+ */
+function lcp_yeast_seo_inline_organization_is_redundant( array $copy, array $org ) {
+	foreach ( $copy as $key => $value ) {
+		if ( in_array( $key, array( '@id', '@type', '@context' ), true ) ) {
+			continue;
+		}
+
+		if ( ! array_key_exists( $key, $org ) || wp_json_encode( $org[ $key ] ) !== wp_json_encode( $value ) ) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+/**
  * Replaces an inline copy of the site's own business, anywhere inside a node,
  * with a reference to the Organization.
  *
- * A page's own schema often describes the business again inside ContactPage.mainEntity
- * or an article's author, with no @id, which makes a second business as far as a
- * search engine can tell. Only nested values that match the Organization by name or
- * address are replaced; the stored schema is never changed, only what is output.
+ * A page's own schema often describes the business again inside ContactPage.mainEntity,
+ * a Service's provider or an article's author. Without an @id that makes a second business
+ * as far as a search engine can tell; with the Organization's @id it repeats what the real node
+ * already says. A copy with no @id is replaced when it matches the Organization by name or
+ * address; a copy with the Organization's @id is replaced when it adds nothing the real node
+ * lacks. The stored schema is never changed, only what is output.
  *
  * @param mixed    $value  A node, a list of nodes, or a plain value.
  * @param string   $org_id The Organization's @id.
  * @param string[] $names  The Organization's names.
  * @param string[] $urls   The Organization's addresses.
+ * @param array    $org    The Organization node, for the redundancy check.
  * @return mixed
  */
-function lcp_yeast_seo_link_inline_organization( $value, $org_id, array $names, array $urls ) {
+function lcp_yeast_seo_link_inline_organization( $value, $org_id, array $names, array $urls, array $org = array() ) {
 	if ( ! is_array( $value ) ) {
 		return $value;
 	}
@@ -528,12 +552,20 @@ function lcp_yeast_seo_link_inline_organization( $value, $org_id, array $names, 
 			continue;
 		}
 
-		if ( isset( $child['@type'] ) && empty( $child['@id'] ) && array_intersect( array_map( 'strval', (array) $child['@type'] ), LCP_YEAST_SEO_ORGANIZATION_TYPES ) && lcp_yeast_seo_inline_business_matches( $child, $names, $urls ) ) {
+		$is_business = isset( $child['@type'] ) && array_intersect( array_map( 'strval', (array) $child['@type'] ), LCP_YEAST_SEO_ORGANIZATION_TYPES );
+
+		if ( $is_business && empty( $child['@id'] ) && lcp_yeast_seo_inline_business_matches( $child, $names, $urls ) ) {
 			$value[ $key ] = array( '@id' => $org_id );
 			continue;
 		}
 
-		$value[ $key ] = lcp_yeast_seo_link_inline_organization( $child, $org_id, $names, $urls );
+		// The same @id (on any host, so JSON copied from staging still counts) with nothing extra to say.
+		if ( $is_business && ! empty( $child['@id'] ) && 'organization' === (string) wp_parse_url( (string) $child['@id'], PHP_URL_FRAGMENT ) && lcp_yeast_seo_inline_organization_is_redundant( $child, $org ) ) {
+			$value[ $key ] = array( '@id' => $org_id );
+			continue;
+		}
+
+		$value[ $key ] = lcp_yeast_seo_link_inline_organization( $child, $org_id, $names, $urls, $org );
 	}
 
 	return $value;
