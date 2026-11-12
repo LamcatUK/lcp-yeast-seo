@@ -896,7 +896,7 @@ add_action( 'admin_enqueue_scripts', 'lcp_yeast_seo_settings_assets' );
  * @return void
  */
 function lcp_yeast_seo_render_organization_intro() {
-	echo '<p>Paste the Organization JSON-LD for this site. It is output only on the pages chosen under Display on; a page whose own schema field declares an Organization keeps that instead.</p>';
+	echo '<p>Paste the Organization JSON-LD for this site. With automatic structured data on, it is added to every page that the automatic data names it on (the WebSite and articles list it as publisher), so those references resolve. Display on applies when automatic data is off. A page whose own schema field declares an Organization keeps that instead.</p>';
 }
 
 /**
@@ -1051,5 +1051,6 @@ function lcp_yeast_seo_render_org_display_field() {
 		<input type="checkbox" name="<?php echo $option; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>[org_show_all]" value="1" <?php checked( '1' === (string) lcp_yeast_seo_get_setting( 'org_show_all', '0' ) ); ?>>
 		Every page on the site (overrides the choices above)
 	</label>
+	<p class="description">With automatic structured data on, the Organization is already added to every page it is referred to, so these choices only matter when that is off.</p>
 	<?php
 }

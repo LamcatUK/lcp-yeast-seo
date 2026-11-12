@@ -242,6 +242,26 @@ class AutoSchemaTest extends TestCase {
 		$this->assertSame( 'http://example.test/', $author['url'] );
 	}
 
+	public function test_an_organization_author_points_at_the_site_organization_when_it_is_on_the_page() {
+		$ctx                   = $this->context( array( 'org_id' => 'http://example.test/#organization' ) );
+		$ctx['page']['author'] = array(
+			'type' => 'Organization',
+			'name' => 'Example',
+			'url'  => 'http://example.test/',
+		);
+
+		$article = $this->node( lcp_yeast_seo_build_auto_graph( $ctx ), 'Article' );
+
+		$this->assertSame( array( '@id' => 'http://example.test/#organization' ), $article['author'] );
+		$this->assertSame( array( '@id' => 'http://example.test/#organization' ), $article['publisher'], 'the article names its publisher too' );
+	}
+
+	public function test_a_person_author_stays_a_person_even_with_an_organization() {
+		$ctx = $this->context( array( 'org_id' => 'http://example.test/#organization' ) );
+
+		$this->assertSame( 'Person', $this->node( lcp_yeast_seo_build_auto_graph( $ctx ), 'Article' )['author']['@type'] );
+	}
+
 	public function test_no_author_means_no_author_property() {
 		$ctx                   = $this->context();
 		$ctx['page']['author'] = null;

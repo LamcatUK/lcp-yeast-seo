@@ -354,6 +354,18 @@ function lcp_yeast_seo_render() {
 		return;
 	}
 
+	// Where the site's Organization is on the page, a copy of it inside this page's own schema becomes a reference.
+	$org = lcp_yeast_seo_org_should_output() ? lcp_yeast_seo_site_organization_node() : null;
+
+	if ( $org ) {
+		$names = array_filter( array( (string) ( $org['name'] ?? '' ), (string) ( $org['legalName'] ?? '' ) ) );
+		$urls  = array( (string) ( $org['url'] ?? '' ), home_url( '/' ) );
+
+		foreach ( $nodes as $i => $node ) {
+			$nodes[ $i ] = lcp_yeast_seo_link_inline_organization( $node, lcp_yeast_seo_organization_id(), $names, $urls );
+		}
+	}
+
 	if ( 1 === count( $nodes ) ) {
 		$payload = $nodes[0];
 
@@ -433,7 +445,98 @@ function lcp_yeast_seo_org_should_output() {
 		return false;
 	}
 
-	return lcp_yeast_seo_org_displays_on( is_front_page(), is_singular( 'page' ) ? get_queried_object_id() : 0 );
+	return lcp_yeast_seo_org_displays_on( is_front_page(), is_singular( 'page' ) ? get_queried_object_id() : 0 ) || lcp_yeast_seo_org_needed_by_auto_schema();
+}
+
+/**
+ * Whether the automatic structured data on this page names the Organization.
+ *
+ * The WebSite and any article list it as their publisher, and a reference to
+ * an @id only means something if the node is on the same page. So wherever the
+ * automatic graph is output, the Organization built from the settings goes
+ * with it, whatever "Display on" says. With Yoast active its own graph already
+ * carries the Organization, so nothing is added.
+ *
+ * @return bool
+ */
+function lcp_yeast_seo_org_needed_by_auto_schema() {
+	return lcp_yeast_seo_auto_schema_active() && lcp_yeast_seo_auto_schema_applies();
+}
+
+/**
+ * The site's Organization node, from the form fields or the JSON-LD source.
+ *
+ * @return array|null
+ */
+function lcp_yeast_seo_site_organization_node() {
+	$nodes = lcp_yeast_seo_org_raw_mode() ? lcp_yeast_seo_org_raw_nodes() : array( lcp_yeast_seo_build_organization() );
+
+	foreach ( $nodes as $node ) {
+		if ( is_array( $node ) && ! empty( $node['@type'] ) && array_intersect( array_map( 'strval', (array) $node['@type'] ), LCP_YEAST_SEO_ORGANIZATION_TYPES ) ) {
+			return $node;
+		}
+	}
+
+	return null;
+}
+
+/**
+ * Whether an inline business describes the site's own Organization: same name, or same web address.
+ *
+ * @param array    $business Inline node.
+ * @param string[] $names    The Organization's names.
+ * @param string[] $urls     The Organization's addresses.
+ * @return bool
+ */
+function lcp_yeast_seo_inline_business_matches( array $business, array $names, array $urls ) {
+	$clean = static function ( $value ) {
+		return strtolower( trim( (string) $value ) );
+	};
+	$trim  = static function ( $value ) use ( $clean ) {
+		return rtrim( preg_replace( '#^https?://(www\.)?#', '', $clean( $value ) ), '/' );
+	};
+
+	$name = isset( $business['name'] ) && is_string( $business['name'] ) ? $clean( $business['name'] ) : '';
+	$url  = isset( $business['url'] ) && is_string( $business['url'] ) ? $trim( $business['url'] ) : '';
+
+	return ( '' !== $name && in_array( $name, array_map( $clean, $names ), true ) )
+		|| ( '' !== $url && in_array( $url, array_map( $trim, array_filter( $urls ) ), true ) );
+}
+
+/**
+ * Replaces an inline copy of the site's own business, anywhere inside a node,
+ * with a reference to the Organization.
+ *
+ * A page's own schema often describes the business again inside ContactPage.mainEntity
+ * or an article's author, with no @id, which makes a second business as far as a
+ * search engine can tell. Only nested values that match the Organization by name or
+ * address are replaced; the stored schema is never changed, only what is output.
+ *
+ * @param mixed    $value  A node, a list of nodes, or a plain value.
+ * @param string   $org_id The Organization's @id.
+ * @param string[] $names  The Organization's names.
+ * @param string[] $urls   The Organization's addresses.
+ * @return mixed
+ */
+function lcp_yeast_seo_link_inline_organization( $value, $org_id, array $names, array $urls ) {
+	if ( ! is_array( $value ) ) {
+		return $value;
+	}
+
+	foreach ( $value as $key => $child ) {
+		if ( ! is_array( $child ) || ( is_string( $key ) && '@' === substr( $key, 0, 1 ) ) ) {
+			continue;
+		}
+
+		if ( isset( $child['@type'] ) && empty( $child['@id'] ) && array_intersect( array_map( 'strval', (array) $child['@type'] ), LCP_YEAST_SEO_ORGANIZATION_TYPES ) && lcp_yeast_seo_inline_business_matches( $child, $names, $urls ) ) {
+			$value[ $key ] = array( '@id' => $org_id );
+			continue;
+		}
+
+		$value[ $key ] = lcp_yeast_seo_link_inline_organization( $child, $org_id, $names, $urls );
+	}
+
+	return $value;
 }
 
 /**

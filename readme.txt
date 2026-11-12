@@ -3,7 +3,7 @@ Tags: seo, schema, sitemap, meta description, open graph
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 0.23.0
+Stable tag: 0.23.1
 
 Per-post SEO controls for titles, descriptions, social tags, canonical URLs and schema, with XML sitemaps. Built to replace Yoast one feature at a time.
 
@@ -33,6 +33,11 @@ After every deploy, run the smoke test against the live site. It checks the site
     LCP_SMOKE_URL=https://example.com LCP_SMOKE_ARCHIVE=/guides/ composer test:smoke
 
 == Changelog ==
+
+= 0.23.1 =
+* Fix: the Organization was only output on the pages chosen under Display on (by default the home page), so everywhere else the automatic WebSite had no `publisher`, a post's BlogPosting had no `publisher`, and a reference to `#organization` pointed at nothing on that page. With automatic structured data on, the Organization (built from your form fields or JSON-LD, as before) is now added to every page the automatic data is output on, so those references resolve. Display on now only matters when automatic data is off. With Yoast active nothing changes.
+* Fix: an article credited to the organization now points at the Organization (`{"@id": ".../#organization"}`) instead of describing a second, unnamed one inline.
+* New: where a page's own schema describes your business again inline with no `@id` (for example a LocalBusiness inside ContactPage.mainEntity), and it has the same name or web address as your Organization, it is output as a reference to the Organization instead. What you saved is not changed, and a different business is left alone.
 
 = 0.23.0 =
 * New: Yeast SEO brand. The starter-jar mark now appears in the header and as the admin menu icon (one colour, so it follows your admin colour scheme). The header band loses its floating bubbles, the version is plain text, status chips say what they mean ("Search engines allowed", "robots.txt edited"), and the active tab has a crust-coloured line. Headings use the Young Serif display face where it is installed (falls back to Georgia).

@@ -220,7 +220,10 @@ function lcp_yeast_seo_build_auto_graph( array $ctx ) {
 			$article['dateModified']  = $page['modified'] ?: $page['published'];
 		}
 
-		if ( ! empty( $page['author']['name'] ) ) {
+		if ( $org_ref && 'Organization' === ( $page['author']['type'] ?? '' ) ) {
+			// The site's own Organization is on the page, so point at it rather than describing it again.
+			$article['author'] = $org_ref;
+		} elseif ( ! empty( $page['author']['name'] ) ) {
 			$article['author'] = array(
 				'@type' => $page['author']['type'] ?? 'Person',
 				'name'  => $page['author']['name'],
@@ -491,6 +494,22 @@ function lcp_yeast_seo_article_author( $author_id, array $ctx ) {
 }
 
 /**
+ * Whether the automatic graph describes the current page: the front page, or a
+ * page, post or listing this plugin manages.
+ *
+ * @return bool
+ */
+function lcp_yeast_seo_auto_schema_applies() {
+	if ( ! is_front_page() && ! lcp_yeast_seo_is_managed_view() ) {
+		return false;
+	}
+
+	$post_id = lcp_yeast_seo_current_post_id();
+
+	return ! ( $post_id && ! in_array( get_post_type( $post_id ), lcp_yeast_seo_post_types(), true ) );
+}
+
+/**
  * Gathers the context for the current request, or null when it isn't a page
  * this module describes.
  *
@@ -499,15 +518,11 @@ function lcp_yeast_seo_article_author( $author_id, array $ctx ) {
 function lcp_yeast_seo_auto_schema_context() {
 	$is_front = is_front_page();
 
-	if ( ! $is_front && ! lcp_yeast_seo_is_managed_view() ) {
+	if ( ! lcp_yeast_seo_auto_schema_applies() ) {
 		return null;
 	}
 
 	$post_id = lcp_yeast_seo_current_post_id();
-
-	if ( $post_id && ! in_array( get_post_type( $post_id ), lcp_yeast_seo_post_types(), true ) ) {
-		return null;
-	}
 
 	$org_id = lcp_yeast_seo_org_should_output() || lcp_yeast_seo_declares_type( LCP_YEAST_SEO_ORGANIZATION_TYPES ) ? lcp_yeast_seo_organization_id() : '';
 
