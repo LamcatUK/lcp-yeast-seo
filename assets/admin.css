@@ -1976,3 +1976,9 @@
 		gap: 2px;
 	}
 }
+
+.lcp-ys-pings__reply {
+	display: block;
+	font-style: normal;
+	overflow-wrap: anywhere;
+}

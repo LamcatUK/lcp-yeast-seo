@@ -189,4 +189,28 @@ class IndexNowTest extends TestCase {
 			$this->assertNotSame( '', lcp_yeast_seo_indexnow_describe( $code ), (string) $code );
 		}
 	}
+
+	/* Waiting out a busy server */
+
+	public function test_the_retry_wait_follows_retry_after_within_limits() {
+		$this->assertSame( LCP_YEAST_SEO_INDEXNOW_RETRY_DELAY, lcp_yeast_seo_indexnow_retry_delay( '' ), 'no header: the default' );
+		$this->assertSame( LCP_YEAST_SEO_INDEXNOW_RETRY_DELAY, lcp_yeast_seo_indexnow_retry_delay( '5' ), 'never hammer sooner than the default' );
+		$this->assertSame( 900, lcp_yeast_seo_indexnow_retry_delay( '900' ) );
+		$this->assertSame( 3600, lcp_yeast_seo_indexnow_retry_delay( '99999' ), 'and never wait more than an hour' );
+		$this->assertSame( LCP_YEAST_SEO_INDEXNOW_RETRY_DELAY, lcp_yeast_seo_indexnow_retry_delay( 'Wed, 21 Oct 2026 07:28:00 GMT' ), 'a date is not understood, so the default' );
+	}
+
+	public function test_a_retry_waits_as_long_as_asked() {
+		$state = lcp_yeast_seo_indexnow_state_retry( array(), array( 'https://a.test/x/' ), array(), 1000, 900 );
+
+		$this->assertSame( 1900, $state['pending']['https://a.test/x/']['time'] );
+	}
+
+	public function test_the_next_send_is_scheduled_for_when_the_earliest_url_is_due() {
+		$state = array( 'pending' => array( 'https://a.test/x/' => array( 'time' => 5000, 'tries' => 1 ), 'https://a.test/y/' => array( 'time' => 4000, 'tries' => 0 ) ) );
+
+		$this->assertSame( 4000 + LCP_YEAST_SEO_INDEXNOW_DELAY + 15, lcp_yeast_seo_indexnow_next_run( $state, 1000 ) );
+		$this->assertSame( 9030, lcp_yeast_seo_indexnow_next_run( $state, 9000 ), 'already overdue: soon, never in the past' );
+		$this->assertNull( lcp_yeast_seo_indexnow_next_run( array( 'pending' => array() ), 1000 ) );
+	}
 }

@@ -16,6 +16,8 @@ define( 'LCP_YEAST_SEO_INDEXNOW_STATE_OPTION', 'lcp_yeast_seo_indexnow_state' );
 define( 'LCP_YEAST_SEO_INDEXNOW_LOG_OPTION', 'lcp_yeast_seo_indexnow_log' );
 define( 'LCP_YEAST_SEO_INDEXNOW_HASH_META', '_lcp_yeast_seo_indexnow_hash' );
 define( 'LCP_YEAST_SEO_INDEXNOW_ENDPOINT', 'https://api.indexnow.org/indexnow' );
+define( 'LCP_YEAST_SEO_INDEXNOW_FALLBACK_ENDPOINT', 'https://www.bing.com/indexnow' );
+define( 'LCP_YEAST_SEO_INDEXNOW_RETRY_DELAY', 300 );
 define( 'LCP_YEAST_SEO_INDEXNOW_CRON', 'lcp_yeast_seo_indexnow_flush' );
 define( 'LCP_YEAST_SEO_INDEXNOW_DELAY', 60 );
 define( 'LCP_YEAST_SEO_INDEXNOW_RESEND_WINDOW', 600 );
@@ -190,16 +192,17 @@ function lcp_yeast_seo_indexnow_state_take( array $state, $now ) {
  * @param string[] $batch URLs that failed.
  * @param int[]    $tries How many times each has been tried before.
  * @param int      $now   Current time.
+ * @param int      $delay Seconds to wait before the next try.
  * @return array
  */
-function lcp_yeast_seo_indexnow_state_retry( array $state, array $batch, array $tries, $now ) {
+function lcp_yeast_seo_indexnow_state_retry( array $state, array $batch, array $tries, $now, $delay = LCP_YEAST_SEO_INDEXNOW_RETRY_DELAY ) {
 	foreach ( $batch as $url ) {
 		$count = ( $tries[ $url ] ?? 0 ) + 1;
 
 		unset( $state['sent'][ $url ] );
 
 		if ( $count < LCP_YEAST_SEO_INDEXNOW_MAX_TRIES ) {
-			$state['pending'][ $url ] = array( 'time' => $now + 300, 'tries' => $count );
+			$state['pending'][ $url ] = array( 'time' => $now + $delay, 'tries' => $count );
 		}
 	}
 
@@ -238,6 +241,31 @@ function lcp_yeast_seo_indexnow_outcome( $code ) {
 	}
 
 	return ( 0 === $code || 429 === $code || $code >= 500 ) ? 'retry' : 'stop';
+}
+
+/**
+ * How long to wait before trying again: what the server asked for in Retry-After (seconds), within reason.
+ *
+ * @param mixed $header The Retry-After header value, or ''.
+ * @return int Seconds.
+ */
+function lcp_yeast_seo_indexnow_retry_delay( $header ) {
+	$seconds = is_numeric( $header ) ? (int) $header : LCP_YEAST_SEO_INDEXNOW_RETRY_DELAY;
+
+	return max( LCP_YEAST_SEO_INDEXNOW_RETRY_DELAY, min( 3600, $seconds ) );
+}
+
+/**
+ * When the next send should run: a little after the earliest URL on the list becomes due.
+ *
+ * @param array $state Waiting list.
+ * @param int   $now   Current time.
+ * @return int|null Time, or null when nothing is waiting.
+ */
+function lcp_yeast_seo_indexnow_next_run( array $state, $now ) {
+	$times = array_column( (array) ( $state['pending'] ?? array() ), 'time' );
+
+	return $times ? max( $now + 30, min( $times ) + LCP_YEAST_SEO_INDEXNOW_DELAY + 15 ) : null;
 }
 
 /**
@@ -328,8 +356,20 @@ function lcp_yeast_seo_indexnow_queue( array $urls ) {
 
 	update_option( LCP_YEAST_SEO_INDEXNOW_STATE_OPTION, $state, false );
 
-	if ( ! wp_next_scheduled( LCP_YEAST_SEO_INDEXNOW_CRON ) ) {
-		wp_schedule_single_event( time() + LCP_YEAST_SEO_INDEXNOW_DELAY + 15, LCP_YEAST_SEO_INDEXNOW_CRON );
+	lcp_yeast_seo_indexnow_schedule( $state );
+}
+
+/**
+ * Makes sure a send is scheduled for when the earliest waiting URL is due.
+ *
+ * @param array $state Waiting list.
+ * @return void
+ */
+function lcp_yeast_seo_indexnow_schedule( array $state ) {
+	$when = lcp_yeast_seo_indexnow_next_run( $state, time() );
+
+	if ( $when && ! wp_next_scheduled( LCP_YEAST_SEO_INDEXNOW_CRON ) ) {
+		wp_schedule_single_event( $when, LCP_YEAST_SEO_INDEXNOW_CRON );
 	}
 }
 
@@ -407,37 +447,62 @@ add_action( 'before_delete_post', 'lcp_yeast_seo_indexnow_before_removal' );
 /**
  * Sends a list of URLs and records what came back.
  *
+ * Tries the shared IndexNow endpoint first. If that is busy or failing it tries Bing's own,
+ * which takes the same request and shares it with the other engines.
+ *
  * @param string[] $urls URLs on this site.
- * @return int HTTP status, 0 for no answer.
+ * @return array{code:int,retry_after:int} The final HTTP status (0 for no answer) and how long to wait before trying again.
  */
 function lcp_yeast_seo_indexnow_send( array $urls ) {
-	$payload  = lcp_yeast_seo_indexnow_payload( lcp_yeast_seo_indexnow_host(), lcp_yeast_seo_indexnow_key(), lcp_yeast_seo_indexnow_key_url(), $urls );
-	$response = wp_remote_post(
-		LCP_YEAST_SEO_INDEXNOW_ENDPOINT,
-		array(
-			'timeout' => 10,
-			'headers' => array( 'Content-Type' => 'application/json; charset=utf-8' ),
-			'body'    => wp_json_encode( $payload ),
-		)
-	);
-	$code     = is_wp_error( $response ) ? 0 : (int) wp_remote_retrieve_response_code( $response );
+	$payload = lcp_yeast_seo_indexnow_payload( lcp_yeast_seo_indexnow_host(), lcp_yeast_seo_indexnow_key(), lcp_yeast_seo_indexnow_key_url(), $urls );
+	$code    = 0;
+	$delay   = LCP_YEAST_SEO_INDEXNOW_RETRY_DELAY;
 
-	lcp_yeast_seo_indexnow_log( count( $payload['urlList'] ), $code );
+	foreach ( array( LCP_YEAST_SEO_INDEXNOW_ENDPOINT, LCP_YEAST_SEO_INDEXNOW_FALLBACK_ENDPOINT ) as $endpoint ) {
+		$response = wp_remote_post(
+			$endpoint,
+			array(
+				'timeout' => 10,
+				'headers' => array( 'Content-Type' => 'application/json; charset=utf-8' ),
+				'body'    => wp_json_encode( $payload ),
+			)
+		);
+		$code     = is_wp_error( $response ) ? 0 : (int) wp_remote_retrieve_response_code( $response );
+		$reply    = is_wp_error( $response ) ? $response->get_error_message() : wp_remote_retrieve_body( $response );
+		$delay    = lcp_yeast_seo_indexnow_retry_delay( is_wp_error( $response ) ? '' : wp_remote_retrieve_header( $response, 'retry-after' ) );
 
-	return $code;
+		lcp_yeast_seo_indexnow_log( count( $payload['urlList'] ), $code, (string) wp_parse_url( $endpoint, PHP_URL_HOST ), $reply );
+
+		if ( 'retry' !== lcp_yeast_seo_indexnow_outcome( $code ) ) {
+			break;
+		}
+	}
+
+	return array( 'code' => $code, 'retry_after' => $delay );
 }
 
 /**
  * Adds an entry to the short log of pings.
  *
- * @param int $count How many URLs were sent.
- * @param int $code  HTTP status, 0 for no answer.
+ * @param int    $count How many URLs were sent.
+ * @param int    $code  HTTP status, 0 for no answer.
+ * @param string $via   The host it was sent to.
+ * @param string $reply What the server said, if anything.
  * @return void
  */
-function lcp_yeast_seo_indexnow_log( $count, $code ) {
+function lcp_yeast_seo_indexnow_log( $count, $code, $via = '', $reply = '' ) {
 	$log = (array) get_option( LCP_YEAST_SEO_INDEXNOW_LOG_OPTION, array() );
 
-	array_unshift( $log, array( 'time' => time(), 'count' => (int) $count, 'code' => (int) $code ) );
+	array_unshift(
+		$log,
+		array(
+			'time'  => time(),
+			'count' => (int) $count,
+			'code'  => (int) $code,
+			'via'   => (string) $via,
+			'reply' => mb_substr( trim( wp_strip_all_tags( (string) $reply ) ), 0, 160 ),
+		)
+	);
 	update_option( LCP_YEAST_SEO_INDEXNOW_LOG_OPTION, array_slice( $log, 0, LCP_YEAST_SEO_INDEXNOW_LOG_SIZE ), false );
 }
 
@@ -457,18 +522,16 @@ function lcp_yeast_seo_indexnow_flush() {
 	list( $state, $batch, $tries ) = lcp_yeast_seo_indexnow_state_take( $state, time() );
 
 	if ( $batch ) {
-		$code = lcp_yeast_seo_indexnow_send( $batch );
+		$result = lcp_yeast_seo_indexnow_send( $batch );
 
-		if ( 'retry' === lcp_yeast_seo_indexnow_outcome( $code ) ) {
-			$state = lcp_yeast_seo_indexnow_state_retry( $state, $batch, $tries, time() );
+		if ( 'retry' === lcp_yeast_seo_indexnow_outcome( $result['code'] ) ) {
+			$state = lcp_yeast_seo_indexnow_state_retry( $state, $batch, $tries, time(), $result['retry_after'] );
 		}
 	}
 
 	update_option( LCP_YEAST_SEO_INDEXNOW_STATE_OPTION, $state, false );
 
-	if ( ! empty( $state['pending'] ) ) {
-		wp_schedule_single_event( time() + LCP_YEAST_SEO_INDEXNOW_DELAY + 15, LCP_YEAST_SEO_INDEXNOW_CRON );
-	}
+	lcp_yeast_seo_indexnow_schedule( $state );
 }
 add_action( LCP_YEAST_SEO_INDEXNOW_CRON, 'lcp_yeast_seo_indexnow_flush' );
 
@@ -530,23 +593,40 @@ function lcp_yeast_seo_indexnow_handle_submit_all() {
 	if ( ! lcp_yeast_seo_indexnow_enabled() || ! lcp_yeast_seo_indexnow_available() ) {
 		$message = array( false, 'Nothing was sent. Pings are off, or this site is hidden from search engines or on a local address.' );
 	} else {
-		$urls    = lcp_yeast_seo_indexnow_all_urls();
-		$sent    = 0;
-		$last    = 200;
+		$urls   = lcp_yeast_seo_indexnow_all_urls();
+		$sent   = 0;
+		$result = array( 'code' => 200, 'retry_after' => LCP_YEAST_SEO_INDEXNOW_RETRY_DELAY );
 
 		foreach ( array_chunk( $urls, LCP_YEAST_SEO_INDEXNOW_MAX_URLS ) as $chunk ) {
-			$last = lcp_yeast_seo_indexnow_send( $chunk );
+			$result  = lcp_yeast_seo_indexnow_send( $chunk );
+			$outcome = lcp_yeast_seo_indexnow_outcome( $result['code'] );
 
-			if ( 'ok' !== lcp_yeast_seo_indexnow_outcome( $last ) ) {
-				break;
+			if ( 'ok' === $outcome ) {
+				$sent += count( $chunk );
+				continue;
 			}
 
-			$sent += count( $chunk );
+			// Busy or no answer: keep the rest, and try again on its own a few minutes later.
+			if ( 'retry' === $outcome ) {
+				$left  = array_slice( $urls, $sent );
+				$state = lcp_yeast_seo_indexnow_state_retry( (array) get_option( LCP_YEAST_SEO_INDEXNOW_STATE_OPTION, array() ), $left, array(), time(), $result['retry_after'] );
+
+				update_option( LCP_YEAST_SEO_INDEXNOW_STATE_OPTION, $state, false );
+				lcp_yeast_seo_indexnow_schedule( $state );
+			}
+
+			break;
 		}
 
-		$message = 'ok' === lcp_yeast_seo_indexnow_outcome( $last )
-			? array( true, sprintf( 'Sent %s to the search engines. %s', lcp_yeast_seo_count_noun( $sent, 'page' ), lcp_yeast_seo_indexnow_describe( $last ) ) )
-			: array( false, 'The send failed. ' . lcp_yeast_seo_indexnow_describe( $last ) );
+		$outcome = lcp_yeast_seo_indexnow_outcome( $result['code'] );
+
+		if ( 'ok' === $outcome ) {
+			$message = array( true, sprintf( 'Sent %s to the search engines. %s', lcp_yeast_seo_count_noun( $sent, 'page' ), lcp_yeast_seo_indexnow_describe( $result['code'] ) ) );
+		} elseif ( 'retry' === $outcome ) {
+			$message = array( false, sprintf( 'The search engines asked us to slow down (%s). The %s have been queued and will be tried again automatically in about %d minutes, up to %d times.', $result['code'] ? 'response ' . $result['code'] : 'no answer', lcp_yeast_seo_count_noun( count( $urls ) - $sent, 'page' ), (int) ceil( $result['retry_after'] / 60 ), LCP_YEAST_SEO_INDEXNOW_MAX_TRIES ) );
+		} else {
+			$message = array( false, 'The send failed and will not be retried. ' . lcp_yeast_seo_indexnow_describe( $result['code'] ) );
+		}
 	}
 
 	set_transient( 'lcp_yeast_seo_indexnow_notice_' . get_current_user_id(), $message, 5 * MINUTE_IN_SECONDS );
@@ -619,7 +699,12 @@ function lcp_yeast_seo_render_indexnow_field() {
 					<li>
 						<span><?php echo esc_html( human_time_diff( (int) $entry['time'] ) . ' ago' ); ?></span>
 						<span><?php echo esc_html( lcp_yeast_seo_count_noun( (int) $entry['count'], 'page' ) ); ?></span>
-						<span><?php echo esc_html( lcp_yeast_seo_indexnow_describe( (int) $entry['code'] ) ); ?></span>
+						<span>
+							<?php echo esc_html( lcp_yeast_seo_indexnow_describe( (int) $entry['code'] ) . ( ! empty( $entry['via'] ) ? ' (' . $entry['via'] . ')' : '' ) ); ?>
+							<?php if ( ! empty( $entry['reply'] ) && ! in_array( (int) $entry['code'], array( 200, 202 ), true ) ) : ?>
+								<em class="lcp-ys-pings__reply"><?php echo esc_html( 'They said: ' . $entry['reply'] ); ?></em>
+							<?php endif; ?>
+						</span>
 					</li>
 				<?php endforeach; ?>
 			</ul>
