@@ -1952,3 +1952,27 @@
 .lcp-ys-score__detail > p {
 	margin: 0 0 12px;
 }
+
+.lcp-ys-pings {
+	margin: 10px 0 0;
+	padding: 0;
+	list-style: none;
+	font-size: 12px;
+}
+
+.lcp-ys-pings li {
+	display: grid;
+	grid-template-columns: 110px 70px 1fr;
+	gap: 12px;
+	margin: 0;
+	padding: 4px 0;
+	border-top: 1px solid var(--ys-line-soft);
+	color: var(--ys-muted);
+}
+
+@media (max-width: 782px) {
+	.lcp-ys-pings li {
+		grid-template-columns: 1fr;
+		gap: 2px;
+	}
+}

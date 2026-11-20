@@ -74,6 +74,7 @@ function lcp_yeast_seo_activate() {
  */
 function lcp_yeast_seo_deactivate() {
 	flush_rewrite_rules();
+	wp_clear_scheduled_hook( 'lcp_yeast_seo_indexnow_flush' );
 }
 
 /**

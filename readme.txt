@@ -3,7 +3,7 @@ Tags: seo, schema, sitemap, meta description, open graph
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 0.23.2
+Stable tag: 0.24.0
 
 Per-post SEO controls for titles, descriptions, social tags, canonical URLs and schema, with XML sitemaps. Built to replace Yoast one feature at a time.
 
@@ -33,6 +33,11 @@ After every deploy, run the smoke test against the live site. It checks the site
     LCP_SMOKE_URL=https://example.com LCP_SMOKE_ARCHIVE=/guides/ composer test:smoke
 
 == Changelog ==
+
+= 0.24.0 =
+* New: IndexNow, under General, Search engine pings. Off until you tick it. Once on, Bing, Yandex and other engines that support it are told when a page is published, changed, unpublished or deleted, instead of waiting to crawl. Google does not use IndexNow, so this does not replace your sitemap.
+* Only pages in your sitemap that can be indexed are sent, and only when their text, address or Yeast SEO settings really changed. A page that was and still is noindex is not sent. Pings wait a minute so a page cache can clear, are batched and de-duplicated, and a failed send is tried again a couple of times. Nothing is ever sent from a local or test address (.local, .test, localhost) or from a site set to discourage search engines.
+* The key is made for you and served at `/{key}.txt` (no file to upload). The card shows the key address and the last few pings with a plain description of each answer. "Send every page now" submits the whole sitemap once.
 
 = 0.23.2 =
 * Fix: the Open Graph type is "article" only for posts. Pages (services, contact and so on), the front page and the blog index report "website", and only articles carry the article published and modified times.
