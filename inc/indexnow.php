@@ -246,6 +246,18 @@ function lcp_yeast_seo_indexnow_outcome( $code ) {
 }
 
 /**
+ * Whether a second endpoint is worth trying: only when the first is down (a server error or no answer).
+ *
+ * "Too many requests" is about the sender, not the endpoint, so asking another one only adds a second refusal.
+ *
+ * @param int $code HTTP status, 0 for no answer.
+ * @return bool
+ */
+function lcp_yeast_seo_indexnow_should_fallback( $code ) {
+	return 0 === (int) $code || (int) $code >= 500;
+}
+
+/**
  * How long to wait before trying again: what the server asked for in Retry-After (seconds), within reason.
  *
  * @param mixed $header The Retry-After header value, or ''.
@@ -326,7 +338,7 @@ function lcp_yeast_seo_indexnow_describe( $code ) {
 		400 => 'Rejected as badly formed.',
 		403 => 'The key was not accepted. Check that the key address opens.',
 		422 => 'The addresses did not match this site.',
-		429 => 'Too many requests. It will be tried again later.',
+		429 => 'Too many requests. Sending pauses for a while, then tries again.',
 	);
 
 	return $messages[ $code ] ?? ( $code >= 500 ? 'The search engine had a problem. It will be tried again.' : 'Response ' . $code . '.' );
@@ -491,8 +503,9 @@ add_action( 'before_delete_post', 'lcp_yeast_seo_indexnow_before_removal' );
 /**
  * Sends a list of URLs and records what came back.
  *
- * Tries the shared IndexNow endpoint first. If that is busy or failing it tries Bing's own,
- * which takes the same request and shares it with the other engines.
+ * Tries the shared IndexNow endpoint first. If that is down (a server error or no answer) it tries
+ * Bing's own, which takes the same request and shares it with the other engines. A "too many requests"
+ * answer is not retried against the second endpoint: the limit is on the sender.
  *
  * @param string[] $urls URLs on this site.
  * @return array{code:int,retry_after:int,paused_until:int} The final HTTP status (0 for no answer), how long to wait before trying again, and the time sending is paused until (0 for no pause).
@@ -501,6 +514,9 @@ function lcp_yeast_seo_indexnow_send( array $urls ) {
 	$payload = lcp_yeast_seo_indexnow_payload( lcp_yeast_seo_indexnow_host(), lcp_yeast_seo_indexnow_key(), lcp_yeast_seo_indexnow_key_url(), $urls );
 	$code    = 0;
 	$delay   = LCP_YEAST_SEO_INDEXNOW_RETRY_DELAY;
+
+	$tried = array();
+	$reply = '';
 
 	foreach ( array( LCP_YEAST_SEO_INDEXNOW_ENDPOINT, LCP_YEAST_SEO_INDEXNOW_FALLBACK_ENDPOINT ) as $endpoint ) {
 		$response = wp_remote_post(
@@ -514,13 +530,15 @@ function lcp_yeast_seo_indexnow_send( array $urls ) {
 		$code     = is_wp_error( $response ) ? 0 : (int) wp_remote_retrieve_response_code( $response );
 		$reply    = is_wp_error( $response ) ? $response->get_error_message() : wp_remote_retrieve_body( $response );
 		$delay    = lcp_yeast_seo_indexnow_retry_delay( is_wp_error( $response ) ? '' : wp_remote_retrieve_header( $response, 'retry-after' ) );
+		$tried[]  = (string) wp_parse_url( $endpoint, PHP_URL_HOST );
 
-		lcp_yeast_seo_indexnow_log( count( $payload['urlList'] ), $code, (string) wp_parse_url( $endpoint, PHP_URL_HOST ), $reply );
-
-		if ( 'retry' !== lcp_yeast_seo_indexnow_outcome( $code ) ) {
+		if ( ! lcp_yeast_seo_indexnow_should_fallback( $code ) ) {
 			break;
 		}
 	}
+
+	// One row per attempt, naming each endpoint that was asked.
+	lcp_yeast_seo_indexnow_log( count( $payload['urlList'] ), $code, implode( ' then ', $tried ), $reply );
 
 	$until = lcp_yeast_seo_indexnow_pause_until( $code, $delay, time() );
 

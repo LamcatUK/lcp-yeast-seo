@@ -242,4 +242,13 @@ class IndexNowTest extends TestCase {
 		$this->assertSame( 9000 + 15, lcp_yeast_seo_indexnow_next_run( $state, 2000, 9000 ), 'not before the pause ends' );
 		$this->assertSame( 2030, lcp_yeast_seo_indexnow_next_run( $state, 2000, 1500 ), 'a pause that has already ended changes nothing' );
 	}
+
+	public function test_the_second_endpoint_is_tried_only_when_the_first_is_down() {
+		$this->assertTrue( lcp_yeast_seo_indexnow_should_fallback( 0 ) );
+		$this->assertTrue( lcp_yeast_seo_indexnow_should_fallback( 500 ) );
+		$this->assertTrue( lcp_yeast_seo_indexnow_should_fallback( 503 ) );
+		$this->assertFalse( lcp_yeast_seo_indexnow_should_fallback( 429 ), 'a rate limit follows the sender to any endpoint' );
+		$this->assertFalse( lcp_yeast_seo_indexnow_should_fallback( 403 ) );
+		$this->assertFalse( lcp_yeast_seo_indexnow_should_fallback( 200 ) );
+	}
 }

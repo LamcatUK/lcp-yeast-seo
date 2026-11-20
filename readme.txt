@@ -3,7 +3,7 @@ Tags: seo, schema, sitemap, meta description, open graph
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 0.24.2
+Stable tag: 0.24.3
 
 Per-post SEO controls for titles, descriptions, social tags, canonical URLs and schema, with XML sitemaps. Built to replace Yoast one feature at a time.
 
@@ -33,6 +33,10 @@ After every deploy, run the smoke test against the live site. It checks the site
     LCP_SMOKE_URL=https://example.com LCP_SMOKE_ARCHIVE=/guides/ composer test:smoke
 
 == Changelog ==
+
+= 0.24.3 =
+* Fix: each ping attempt was logged twice, once per endpoint, which looked like duplicate sends. It is now one row per attempt, naming the endpoint or endpoints asked.
+* Changed: the second endpoint (Bing's own) is tried only when the first is down, meaning a server error or no answer. A "too many requests" answer is about the sender, not the endpoint, so it is no longer repeated against a second one.
 
 = 0.24.2 =
 * New: after a "too many requests" answer, sending pauses for an hour (or longer if the server asks), so pressing the button again, or a burst of edits, cannot make the throttling worse. Pages published or changed during the pause, and anything you ask to send, are queued and go out by themselves when it ends. The card says when it will resume and the button is greyed out meanwhile. A server error or a refused key does not start a pause.
