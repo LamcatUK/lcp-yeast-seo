@@ -18,6 +18,8 @@ define( 'LCP_YEAST_SEO_INDEXNOW_HASH_META', '_lcp_yeast_seo_indexnow_hash' );
 define( 'LCP_YEAST_SEO_INDEXNOW_ENDPOINT', 'https://api.indexnow.org/indexnow' );
 define( 'LCP_YEAST_SEO_INDEXNOW_FALLBACK_ENDPOINT', 'https://www.bing.com/indexnow' );
 define( 'LCP_YEAST_SEO_INDEXNOW_RETRY_DELAY', 300 );
+define( 'LCP_YEAST_SEO_INDEXNOW_PAUSE', 3600 );
+define( 'LCP_YEAST_SEO_INDEXNOW_PAUSE_OPTION', 'lcp_yeast_seo_indexnow_pause' );
 define( 'LCP_YEAST_SEO_INDEXNOW_CRON', 'lcp_yeast_seo_indexnow_flush' );
 define( 'LCP_YEAST_SEO_INDEXNOW_DELAY', 60 );
 define( 'LCP_YEAST_SEO_INDEXNOW_RESEND_WINDOW', 600 );
@@ -256,16 +258,58 @@ function lcp_yeast_seo_indexnow_retry_delay( $header ) {
 }
 
 /**
- * When the next send should run: a little after the earliest URL on the list becomes due.
+ * When sending should pause until, after a response: an hour (or what the server asked for, if longer)
+ * when the search engines said "too many requests", otherwise not at all.
  *
- * @param array $state Waiting list.
- * @param int   $now   Current time.
+ * @param int $code        HTTP status, 0 for no answer.
+ * @param int $retry_after Seconds the server asked us to wait.
+ * @param int $now         Current time.
+ * @return int Time to pause until, 0 for no pause.
+ */
+function lcp_yeast_seo_indexnow_pause_until( $code, $retry_after, $now ) {
+	return 429 === (int) $code ? $now + max( LCP_YEAST_SEO_INDEXNOW_PAUSE, (int) $retry_after ) : 0;
+}
+
+/**
+ * Whether sending is paused.
+ *
+ * @param int $until Time the pause ends, 0 for none.
+ * @param int $now   Current time.
+ * @return bool
+ */
+function lcp_yeast_seo_indexnow_is_paused( $until, $now ) {
+	return (int) $until > $now;
+}
+
+/**
+ * When the next send should run: a little after the earliest URL on the list becomes due, and not before a pause ends.
+ *
+ * @param array $state        Waiting list.
+ * @param int   $now          Current time.
+ * @param int   $paused_until Time a pause ends, 0 for none.
  * @return int|null Time, or null when nothing is waiting.
  */
-function lcp_yeast_seo_indexnow_next_run( array $state, $now ) {
+function lcp_yeast_seo_indexnow_next_run( array $state, $now, $paused_until = 0 ) {
 	$times = array_column( (array) ( $state['pending'] ?? array() ), 'time' );
 
-	return $times ? max( $now + 30, min( $times ) + LCP_YEAST_SEO_INDEXNOW_DELAY + 15 ) : null;
+	if ( ! $times ) {
+		return null;
+	}
+
+	$when = max( $now + 30, min( $times ) + LCP_YEAST_SEO_INDEXNOW_DELAY + 15 );
+
+	return lcp_yeast_seo_indexnow_is_paused( $paused_until, $now ) ? max( $when, (int) $paused_until + 15 ) : $when;
+}
+
+/**
+ * The time sending is paused until, or 0.
+ *
+ * @return int
+ */
+function lcp_yeast_seo_indexnow_paused_until() {
+	$until = (int) get_option( LCP_YEAST_SEO_INDEXNOW_PAUSE_OPTION, 0 );
+
+	return lcp_yeast_seo_indexnow_is_paused( $until, time() ) ? $until : 0;
 }
 
 /**
@@ -366,7 +410,7 @@ function lcp_yeast_seo_indexnow_queue( array $urls ) {
  * @return void
  */
 function lcp_yeast_seo_indexnow_schedule( array $state ) {
-	$when = lcp_yeast_seo_indexnow_next_run( $state, time() );
+	$when = lcp_yeast_seo_indexnow_next_run( $state, time(), lcp_yeast_seo_indexnow_paused_until() );
 
 	if ( $when && ! wp_next_scheduled( LCP_YEAST_SEO_INDEXNOW_CRON ) ) {
 		wp_schedule_single_event( $when, LCP_YEAST_SEO_INDEXNOW_CRON );
@@ -451,7 +495,7 @@ add_action( 'before_delete_post', 'lcp_yeast_seo_indexnow_before_removal' );
  * which takes the same request and shares it with the other engines.
  *
  * @param string[] $urls URLs on this site.
- * @return array{code:int,retry_after:int} The final HTTP status (0 for no answer) and how long to wait before trying again.
+ * @return array{code:int,retry_after:int,paused_until:int} The final HTTP status (0 for no answer), how long to wait before trying again, and the time sending is paused until (0 for no pause).
  */
 function lcp_yeast_seo_indexnow_send( array $urls ) {
 	$payload = lcp_yeast_seo_indexnow_payload( lcp_yeast_seo_indexnow_host(), lcp_yeast_seo_indexnow_key(), lcp_yeast_seo_indexnow_key_url(), $urls );
@@ -478,7 +522,15 @@ function lcp_yeast_seo_indexnow_send( array $urls ) {
 		}
 	}
 
-	return array( 'code' => $code, 'retry_after' => $delay );
+	$until = lcp_yeast_seo_indexnow_pause_until( $code, $delay, time() );
+
+	if ( $until ) {
+		update_option( LCP_YEAST_SEO_INDEXNOW_PAUSE_OPTION, $until, false );
+	} elseif ( 'ok' === lcp_yeast_seo_indexnow_outcome( $code ) ) {
+		delete_option( LCP_YEAST_SEO_INDEXNOW_PAUSE_OPTION );
+	}
+
+	return array( 'code' => $code, 'retry_after' => $delay, 'paused_until' => $until );
 }
 
 /**
@@ -516,6 +568,12 @@ function lcp_yeast_seo_indexnow_flush() {
 
 	if ( ! lcp_yeast_seo_indexnow_enabled() || ! lcp_yeast_seo_indexnow_available() ) {
 		delete_option( LCP_YEAST_SEO_INDEXNOW_STATE_OPTION );
+		return;
+	}
+
+	// Paused after a "too many requests": leave everything on the list and come back when it ends.
+	if ( lcp_yeast_seo_indexnow_paused_until() ) {
+		lcp_yeast_seo_indexnow_schedule( $state );
 		return;
 	}
 
@@ -592,6 +650,15 @@ function lcp_yeast_seo_indexnow_handle_submit_all() {
 
 	if ( ! lcp_yeast_seo_indexnow_enabled() || ! lcp_yeast_seo_indexnow_available() ) {
 		$message = array( false, 'Nothing was sent. Pings are off, or this site is hidden from search engines or on a local address.' );
+	} elseif ( lcp_yeast_seo_indexnow_paused_until() ) {
+		// Already told to slow down: queue everything for when the pause ends, and send nothing now.
+		$urls  = lcp_yeast_seo_indexnow_all_urls();
+		$state = lcp_yeast_seo_indexnow_state_add( (array) get_option( LCP_YEAST_SEO_INDEXNOW_STATE_OPTION, array() ), $urls, time() );
+
+		update_option( LCP_YEAST_SEO_INDEXNOW_STATE_OPTION, $state, false );
+		lcp_yeast_seo_indexnow_schedule( $state );
+
+		$message = array( false, sprintf( 'Sending is paused until %s because the search engines asked us to slow down. The %s are queued and will go out automatically then.', wp_date( 'H:i', lcp_yeast_seo_indexnow_paused_until() ), lcp_yeast_seo_count_noun( count( $urls ), 'page' ) ) );
 	} else {
 		$urls   = lcp_yeast_seo_indexnow_all_urls();
 		$sent   = 0;
@@ -623,7 +690,7 @@ function lcp_yeast_seo_indexnow_handle_submit_all() {
 		if ( 'ok' === $outcome ) {
 			$message = array( true, sprintf( 'Sent %s to the search engines. %s', lcp_yeast_seo_count_noun( $sent, 'page' ), lcp_yeast_seo_indexnow_describe( $result['code'] ) ) );
 		} elseif ( 'retry' === $outcome ) {
-			$message = array( false, sprintf( 'The search engines asked us to slow down (%s). The %s have been queued and will be tried again automatically in about %d minutes, up to %d times.', $result['code'] ? 'response ' . $result['code'] : 'no answer', lcp_yeast_seo_count_noun( count( $urls ) - $sent, 'page' ), (int) ceil( $result['retry_after'] / 60 ), LCP_YEAST_SEO_INDEXNOW_MAX_TRIES ) );
+			$message = array( false, sprintf( 'The search engines asked us to slow down (%s). The %s have been queued and %s', $result['code'] ? 'response ' . $result['code'] : 'no answer', lcp_yeast_seo_count_noun( count( $urls ) - $sent, 'page' ), ! empty( $result['paused_until'] ) ? 'will go out automatically after a pause until ' . wp_date( 'H:i', $result['paused_until'] ) . '.' : sprintf( 'will be tried again automatically in about %d minutes, up to %d times.', (int) ceil( $result['retry_after'] / 60 ), LCP_YEAST_SEO_INDEXNOW_MAX_TRIES ) ) );
 		} else {
 			$message = array( false, 'The send failed and will not be retried. ' . lcp_yeast_seo_indexnow_describe( $result['code'] ) );
 		}
@@ -670,6 +737,7 @@ function lcp_yeast_seo_render_indexnow_field() {
 	$available = lcp_yeast_seo_indexnow_available();
 	$notice    = get_transient( 'lcp_yeast_seo_indexnow_notice_' . get_current_user_id() );
 	$log       = array_slice( (array) get_option( LCP_YEAST_SEO_INDEXNOW_LOG_OPTION, array() ), 0, 5 );
+	$paused    = lcp_yeast_seo_indexnow_paused_until();
 
 	if ( is_array( $notice ) ) {
 		delete_transient( 'lcp_yeast_seo_indexnow_notice_' . get_current_user_id() );
@@ -689,8 +757,11 @@ function lcp_yeast_seo_render_indexnow_field() {
 	<?php endif; ?>
 	<?php if ( $enabled ) : ?>
 		<p class="description">Key file: <a href="<?php echo esc_url( lcp_yeast_seo_indexnow_key_url() ); ?>" target="_blank" rel="noopener"><code><?php echo esc_html( lcp_yeast_seo_indexnow_key_url() ); ?></code></a></p>
+		<?php if ( $paused ) : ?>
+			<p class="description"><strong>Paused until <?php echo esc_html( wp_date( 'H:i', $paused ) ); ?></strong> because the search engines asked us to slow down. Pages published or changed meanwhile, and anything waiting, go out automatically after that.</p>
+		<?php endif; ?>
 		<p>
-			<button type="submit" class="button" form="lcp-yeast-seo-indexnow-all" <?php disabled( ! $available ); ?>>Send every page now</button>
+			<button type="submit" class="button" form="lcp-yeast-seo-indexnow-all" <?php disabled( ! $available || $paused ); ?>>Send every page now</button>
 			<span class="description">Use it once after switching this on, or after a big change.</span>
 		</p>
 		<?php if ( $log ) : ?>

@@ -213,4 +213,33 @@ class IndexNowTest extends TestCase {
 		$this->assertSame( 9030, lcp_yeast_seo_indexnow_next_run( $state, 9000 ), 'already overdue: soon, never in the past' );
 		$this->assertNull( lcp_yeast_seo_indexnow_next_run( array( 'pending' => array() ), 1000 ) );
 	}
+
+	/* Pausing after "too many requests" */
+
+	public function test_only_too_many_requests_starts_a_pause() {
+		$this->assertSame( 1000 + LCP_YEAST_SEO_INDEXNOW_PAUSE, lcp_yeast_seo_indexnow_pause_until( 429, 300, 1000 ) );
+		$this->assertSame( 0, lcp_yeast_seo_indexnow_pause_until( 200, 300, 1000 ) );
+		$this->assertSame( 0, lcp_yeast_seo_indexnow_pause_until( 503, 300, 1000 ), 'a server error is retried, not paused for an hour' );
+		$this->assertSame( 0, lcp_yeast_seo_indexnow_pause_until( 403, 300, 1000 ) );
+		$this->assertSame( 0, lcp_yeast_seo_indexnow_pause_until( 0, 300, 1000 ) );
+	}
+
+	public function test_the_pause_is_an_hour_or_what_the_server_asked_if_longer() {
+		$this->assertSame( 1000 + 3600, lcp_yeast_seo_indexnow_pause_until( 429, 900, 1000 ) );
+		$this->assertSame( 1000 + 7200, lcp_yeast_seo_indexnow_pause_until( 429, 7200, 1000 ) );
+	}
+
+	public function test_a_pause_is_over_once_its_time_has_passed() {
+		$this->assertTrue( lcp_yeast_seo_indexnow_is_paused( 5000, 4999 ) );
+		$this->assertFalse( lcp_yeast_seo_indexnow_is_paused( 5000, 5000 ) );
+		$this->assertFalse( lcp_yeast_seo_indexnow_is_paused( 0, 1 ) );
+	}
+
+	public function test_the_next_send_waits_for_the_pause_to_end() {
+		$state = array( 'pending' => array( 'https://a.test/x/' => array( 'time' => 1000, 'tries' => 0 ) ) );
+
+		$this->assertSame( 2000 + 30, lcp_yeast_seo_indexnow_next_run( $state, 2000, 0 ) );
+		$this->assertSame( 9000 + 15, lcp_yeast_seo_indexnow_next_run( $state, 2000, 9000 ), 'not before the pause ends' );
+		$this->assertSame( 2030, lcp_yeast_seo_indexnow_next_run( $state, 2000, 1500 ), 'a pause that has already ended changes nothing' );
+	}
 }

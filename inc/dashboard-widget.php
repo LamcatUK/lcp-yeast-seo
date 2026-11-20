@@ -59,6 +59,41 @@ function lcp_yeast_seo_widget_top_problems( array $problems, $limit = 4 ) {
 }
 
 /**
+ * The IndexNow line for the widget, or '' when it is switched off.
+ *
+ * @param array $facts enabled, available, paused_until (formatted time or ''), queued, last (ago, count, code) or null.
+ * @return string
+ */
+function lcp_yeast_seo_widget_indexnow_line( array $facts ) {
+	if ( empty( $facts['enabled'] ) ) {
+		return '';
+	}
+
+	if ( empty( $facts['available'] ) ) {
+		return 'On, but nothing is sent from this site (a local address, or hidden from search engines).';
+	}
+
+	$parts = array();
+	$last  = $facts['last'] ?? null;
+
+	if ( $last ) {
+		$parts[] = in_array( (int) $last['code'], array( 200, 202 ), true )
+			? sprintf( 'Last ping %s ago: %s accepted.', $last['ago'], lcp_yeast_seo_count_noun( (int) $last['count'], 'page' ) )
+			: sprintf( 'Last ping %s ago: %s not accepted (%s).', $last['ago'], lcp_yeast_seo_count_noun( (int) $last['count'], 'page' ), (int) $last['code'] ? 'response ' . (int) $last['code'] : 'no answer' );
+	}
+
+	if ( ! empty( $facts['paused_until'] ) ) {
+		$parts[] = 'Paused until ' . $facts['paused_until'] . '.';
+	}
+
+	if ( ! empty( $facts['queued'] ) ) {
+		$parts[] = lcp_yeast_seo_count_noun( (int) $facts['queued'], 'page' ) . ' waiting to be sent.';
+	}
+
+	return $parts ? implode( ' ', $parts ) : 'On. Nothing has been sent yet.';
+}
+
+/**
  * A tab of the settings screen.
  *
  * @param string $tab Tab slug.
@@ -129,6 +164,23 @@ function lcp_yeast_seo_render_dashboard_widget() {
 	}
 
 	$counts = lcp_yeast_seo_widget_index_counts( $ids, $settings );
+
+	$ping_log   = (array) get_option( LCP_YEAST_SEO_INDEXNOW_LOG_OPTION, array() );
+	$ping_state = (array) get_option( LCP_YEAST_SEO_INDEXNOW_STATE_OPTION, array() );
+	$ping_until = lcp_yeast_seo_indexnow_paused_until();
+	$ping_line  = lcp_yeast_seo_widget_indexnow_line(
+		array(
+			'enabled'      => lcp_yeast_seo_indexnow_enabled(),
+			'available'    => lcp_yeast_seo_indexnow_available(),
+			'paused_until' => $ping_until ? wp_date( 'H:i', $ping_until ) : '',
+			'queued'       => count( (array) ( $ping_state['pending'] ?? array() ) ),
+			'last'         => $ping_log ? array(
+				'ago'   => human_time_diff( (int) $ping_log[0]['time'] ),
+				'count' => (int) $ping_log[0]['count'],
+				'code'  => (int) $ping_log[0]['code'],
+			) : null,
+		)
+	);
 	?>
 	<div class="lcp-ys lcp-ys-dw">
 		<?php if ( $hidden ) : ?>
@@ -205,6 +257,13 @@ function lcp_yeast_seo_render_dashboard_widget() {
 					);
 					?>
 				</p>
+			</section>
+		<?php endif; ?>
+
+		<?php if ( '' !== $ping_line ) : ?>
+			<section class="lcp-ys-dw__block">
+				<h3>Search engine pings</h3>
+				<p><?php echo esc_html( $ping_line ); ?> <a href="<?php echo esc_url( lcp_yeast_seo_widget_tab_url( 'general' ) ); ?>">Settings</a></p>
 			</section>
 		<?php endif; ?>
 

@@ -31,4 +31,41 @@ class DashboardWidgetTest extends TestCase {
 		$this->assertSame( array( 'c1', 'c2', 'c3', 'c4' ), array_column( $top, 'code' ) );
 		$this->assertCount( 1, lcp_yeast_seo_widget_top_problems( $problems, 0 ), 'never asks for fewer than one' );
 	}
+
+	/* IndexNow line */
+
+	private function ping( array $override = array() ) {
+		return lcp_yeast_seo_widget_indexnow_line( $override + array( 'enabled' => true, 'available' => true, 'paused_until' => '', 'queued' => 0, 'last' => null ) );
+	}
+
+	public function test_no_ping_line_when_switched_off() {
+		$this->assertSame( '', $this->ping( array( 'enabled' => false ) ) );
+	}
+
+	public function test_it_says_when_nothing_can_be_sent_from_the_site() {
+		$this->assertStringContainsString( 'nothing is sent from this site', $this->ping( array( 'available' => false ) ) );
+	}
+
+	public function test_it_says_when_nothing_has_been_sent_yet() {
+		$this->assertSame( 'On. Nothing has been sent yet.', $this->ping() );
+	}
+
+	public function test_a_successful_ping_is_reported_as_accepted() {
+		$this->assertSame( 'Last ping 14 minutes ago: 22 pages accepted.', $this->ping( array( 'last' => array( 'ago' => '14 minutes', 'count' => 22, 'code' => 200 ) ) ) );
+		$this->assertStringContainsString( 'accepted', $this->ping( array( 'last' => array( 'ago' => '1 min', 'count' => 1, 'code' => 202 ) ) ) );
+	}
+
+	public function test_a_refused_ping_names_the_response() {
+		$line = $this->ping( array( 'last' => array( 'ago' => '2 minutes', 'count' => 22, 'code' => 429 ) ) );
+
+		$this->assertStringContainsString( 'not accepted (response 429)', $line );
+		$this->assertStringContainsString( 'not accepted (no answer)', $this->ping( array( 'last' => array( 'ago' => '2 minutes', 'count' => 22, 'code' => 0 ) ) ) );
+	}
+
+	public function test_a_pause_and_a_queue_are_both_shown() {
+		$line = $this->ping( array( 'paused_until' => '15:40', 'queued' => 22, 'last' => array( 'ago' => '2 minutes', 'count' => 22, 'code' => 429 ) ) );
+
+		$this->assertStringContainsString( 'Paused until 15:40.', $line );
+		$this->assertStringContainsString( '22 pages waiting to be sent.', $line );
+	}
 }
