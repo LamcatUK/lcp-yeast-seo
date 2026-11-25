@@ -2,9 +2,21 @@
 /**
  * IndexNow: tells Bing, Yandex and other engines that a page was published, changed or removed.
  *
- * Off until switched on. Pings wait a minute so a page cache has time to clear, are batched and
- * de-duplicated, and only go out when the page really changed. Nothing is sent from local or test
- * hosts or from a site that discourages search engines. Google does not use IndexNow.
+ * DORMANT. The pinging, the queue, the settings card and the dashboard line are switched off, because
+ * a shared host's outgoing address is throttled by the search engines and the submitting now happens
+ * from outside the site. The code is kept so it can come back, for example as a relay. To bring it back:
+ *
+ *     add_filter( 'lcp_yeast_seo_indexnow_feature', '__return_true' );
+ *
+ * (in an mu-plugin or the site's dev-config plugin), then tick IndexNow under General.
+ *
+ * The one part that stays on is the key file. IndexNow needs the site to serve its key at
+ * /{key}.txt so the engines can verify ownership, and an external submitter depends on that. It is
+ * served whenever a key was generated earlier, and does nothing else.
+ *
+ * When on: pings wait a minute so a page cache can clear, are batched and de-duplicated, and only
+ * go out when the page really changed. Nothing is sent from local or test hosts or from a site that
+ * discourages search engines. Google does not use IndexNow.
  *
  * @package lcp-yeast-seo
  */
@@ -28,12 +40,21 @@ define( 'LCP_YEAST_SEO_INDEXNOW_MAX_TRIES', 3 );
 define( 'LCP_YEAST_SEO_INDEXNOW_LOG_SIZE', 15 );
 
 /**
- * Whether the integration is switched on.
+ * Whether the IndexNow feature exists at all. Off: see the note at the top of this file.
+ *
+ * @return bool
+ */
+function lcp_yeast_seo_indexnow_feature() {
+	return (bool) apply_filters( 'lcp_yeast_seo_indexnow_feature', false );
+}
+
+/**
+ * Whether the integration is switched on: the feature is present and the box is ticked.
  *
  * @return bool
  */
 function lcp_yeast_seo_indexnow_enabled() {
-	return lcp_yeast_seo_flag_setting( 'indexnow', false );
+	return lcp_yeast_seo_indexnow_feature() && lcp_yeast_seo_flag_setting( 'indexnow', false );
 }
 
 /**
@@ -612,20 +633,39 @@ function lcp_yeast_seo_indexnow_flush() {
 add_action( LCP_YEAST_SEO_INDEXNOW_CRON, 'lcp_yeast_seo_indexnow_flush' );
 
 /**
+ * Whether a request path is the key file for a key.
+ *
+ * @param string $path Request path.
+ * @param string $base The site's path, '/' or a sub-folder.
+ * @param string $key  The key.
+ * @return bool
+ */
+function lcp_yeast_seo_indexnow_is_key_request( $path, $base, $key ) {
+	return lcp_yeast_seo_indexnow_key_is_valid( $key ) && trailingslashit( $base ) . $key . '.txt' === $path;
+}
+
+/**
  * Serves the key file at /{key}.txt, which is how the engines check the site is yours.
+ *
+ * Stays on even while the rest of IndexNow is dormant, because a submitter outside the site needs it.
+ * It only serves a key that was generated earlier; it never makes one.
  *
  * @return void
  */
 function lcp_yeast_seo_indexnow_serve_key_file() {
-	if ( is_admin() || ! lcp_yeast_seo_indexnow_enabled() || empty( $_SERVER['REQUEST_URI'] ) ) {
+	if ( is_admin() || empty( $_SERVER['REQUEST_URI'] ) ) {
+		return;
+	}
+
+	$key = get_option( LCP_YEAST_SEO_INDEXNOW_KEY_OPTION, '' );
+
+	if ( ! lcp_yeast_seo_indexnow_key_is_valid( $key ) ) {
 		return;
 	}
 
 	$path = (string) wp_parse_url( wp_unslash( $_SERVER['REQUEST_URI'] ), PHP_URL_PATH ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- only compared with the key.
-	$base = (string) wp_parse_url( home_url( '/' ), PHP_URL_PATH );
-	$key  = lcp_yeast_seo_indexnow_key();
 
-	if ( trailingslashit( $base ) . $key . '.txt' !== $path ) {
+	if ( ! lcp_yeast_seo_indexnow_is_key_request( $path, (string) wp_parse_url( home_url( '/' ), PHP_URL_PATH ), $key ) ) {
 		return;
 	}
 
@@ -665,6 +705,10 @@ function lcp_yeast_seo_indexnow_handle_submit_all() {
 	}
 
 	check_admin_referer( 'lcp_yeast_seo_indexnow_all' );
+
+	if ( ! lcp_yeast_seo_indexnow_feature() ) {
+		wp_die( esc_html__( 'IndexNow is switched off.', 'lcp-yeast-seo' ) );
+	}
 
 	if ( ! lcp_yeast_seo_indexnow_enabled() || ! lcp_yeast_seo_indexnow_available() ) {
 		$message = array( false, 'Nothing was sent. Pings are off, or this site is hidden from search engines or on a local address.' );

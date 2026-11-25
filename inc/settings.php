@@ -77,7 +77,8 @@ function lcp_yeast_seo_sanitize_settings( $input ) {
 		'title_templates'           => lcp_yeast_seo_sanitize_title_templates( $input['title_templates'] ?? array() ),
 		'archives'                  => lcp_yeast_seo_sanitize_archives( $input['archives'] ?? array() ),
 		'noindex_unused_archives'   => empty( $input['noindex_unused_archives'] ) ? '0' : '1',
-		'indexnow'                  => empty( $input['indexnow'] ) ? '0' : '1',
+		// Kept as it was while the feature is dormant, so ticking it later is not undone by a save in between.
+		'indexnow'                  => lcp_yeast_seo_indexnow_feature() ? ( empty( $input['indexnow'] ) ? '0' : '1' ) : (string) lcp_yeast_seo_get_setting( 'indexnow', '0' ),
 	) + lcp_yeast_seo_sanitize_organization( $input );
 }
 
@@ -357,7 +358,9 @@ function lcp_yeast_seo_register_settings_page() {
 	add_settings_section( 'lcp_yeast_seo_archives', 'Archives', 'lcp_yeast_seo_render_archives_intro', 'lcp-yeast-seo' );
 	add_settings_section( 'lcp_yeast_seo_defaults', 'Social sharing', 'lcp_yeast_seo_render_social_intro', 'lcp-yeast-seo' );
 	add_settings_section( 'lcp_yeast_seo_sitemaps', 'XML sitemaps', 'lcp_yeast_seo_render_sitemaps_intro', 'lcp-yeast-seo' );
-	add_settings_section( 'lcp_yeast_seo_indexnow', 'Search engine pings', 'lcp_yeast_seo_render_indexnow_intro', 'lcp-yeast-seo' );
+	if ( lcp_yeast_seo_indexnow_feature() ) {
+		add_settings_section( 'lcp_yeast_seo_indexnow', 'Search engine pings', 'lcp_yeast_seo_render_indexnow_intro', 'lcp-yeast-seo' );
+	}
 	add_settings_section( 'lcp_yeast_seo_organization', 'Organization schema', 'lcp_yeast_seo_render_organization_intro', 'lcp-yeast-seo-schema' );
 	add_settings_section( 'lcp_yeast_seo_org_score', 'Organization schema score', 'lcp_yeast_seo_render_org_score_intro', 'lcp-yeast-seo-schema' );
 	add_settings_field( 'org_score', 'Completeness', 'lcp_yeast_seo_render_org_score_field', 'lcp-yeast-seo-schema', 'lcp_yeast_seo_org_score' );
@@ -444,7 +447,9 @@ function lcp_yeast_seo_register_settings_page() {
 		'lcp_yeast_seo_sitemaps'
 	);
 
-	add_settings_field( 'indexnow', 'IndexNow', 'lcp_yeast_seo_render_indexnow_field', 'lcp-yeast-seo', 'lcp_yeast_seo_indexnow' );
+	if ( lcp_yeast_seo_indexnow_feature() ) {
+		add_settings_field( 'indexnow', 'IndexNow', 'lcp_yeast_seo_render_indexnow_field', 'lcp-yeast-seo', 'lcp_yeast_seo_indexnow' );
+	}
 
 	if ( lcp_yeast_seo_org_fields_ui() ) {
 		add_settings_field( 'org_mode', 'Source', 'lcp_yeast_seo_render_org_mode_field', 'lcp-yeast-seo-schema', 'lcp_yeast_seo_organization' );
@@ -865,7 +870,9 @@ function lcp_yeast_seo_render_settings_page() {
 				</div>
 			</form>
 			<?php lcp_yeast_seo_render_org_wizard_form(); ?>
-			<?php lcp_yeast_seo_render_indexnow_form(); ?>
+			<?php if ( lcp_yeast_seo_indexnow_feature() ) : ?>
+				<?php lcp_yeast_seo_render_indexnow_form(); ?>
+			<?php endif; ?>
 			<?php if ( is_file( lcp_yeast_seo_robots_file_path() ) ) : ?>
 				<form id="lcp-yeast-seo-robots-takeover" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 					<input type="hidden" name="action" value="lcp_yeast_seo_robots_takeover">

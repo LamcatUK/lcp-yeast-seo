@@ -251,4 +251,22 @@ class IndexNowTest extends TestCase {
 		$this->assertFalse( lcp_yeast_seo_indexnow_should_fallback( 403 ) );
 		$this->assertFalse( lcp_yeast_seo_indexnow_should_fallback( 200 ) );
 	}
+
+	/* Dormant, but the key file stays */
+
+	public function test_the_feature_is_off_unless_something_turns_it_on() {
+		$this->assertFalse( lcp_yeast_seo_indexnow_feature() );
+		$this->assertFalse( lcp_yeast_seo_indexnow_enabled(), 'even with the box ticked, while the feature is off nothing is sent' );
+	}
+
+	public function test_the_key_file_is_recognised_at_the_site_root_and_in_a_subfolder() {
+		$key = 'abcdef0123456789abcdef0123456789';
+
+		$this->assertTrue( lcp_yeast_seo_indexnow_is_key_request( '/' . $key . '.txt', '/', $key ) );
+		$this->assertTrue( lcp_yeast_seo_indexnow_is_key_request( '/blog/' . $key . '.txt', '/blog/', $key ) );
+		$this->assertFalse( lcp_yeast_seo_indexnow_is_key_request( '/' . $key . '.txt', '/blog/', $key ) );
+		$this->assertFalse( lcp_yeast_seo_indexnow_is_key_request( '/other.txt', '/', $key ) );
+		$this->assertFalse( lcp_yeast_seo_indexnow_is_key_request( '/.txt', '/', '' ), 'no key, no file' );
+		$this->assertFalse( lcp_yeast_seo_indexnow_is_key_request( '/short.txt', '/', 'short' ), 'a key of the wrong shape is never served' );
+	}
 }
