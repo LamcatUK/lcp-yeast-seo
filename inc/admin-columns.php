@@ -27,6 +27,18 @@ function lcp_yeast_seo_too_long_badge( $value, $max ) {
 	return ' <span class="lcp-yeast-seo-too-long" title="' . esc_attr( $title ) . '">' . esc_html( sprintf( /* translators: %d: character count. */ __( '%d - too long', 'lcp-yeast-seo' ), $length ) ) . '</span>';
 }
 
+/**
+ * Wraps a cell's text so it stays on one line and ends in an ellipsis when it is too long for the
+ * column, with the whole text on hover. The badges that follow it stay outside, so they are never clipped.
+ *
+ * @param string $text  Text to show.
+ * @param string $style Optional inline style, for the muted fallback title.
+ * @return string HTML.
+ */
+function lcp_yeast_seo_clip( $text, $style = '' ) {
+	return '<span class="lcp-yeast-seo-clip" title="' . esc_attr( $text ) . '"' . ( '' !== $style ? ' style="' . esc_attr( $style ) . '"' : '' ) . '>' . esc_html( $text ) . '</span>';
+}
+
 function lcp_yeast_seo_filter_posts_columns( $columns ) {
 	$new = array();
 	foreach ( $columns as $key => $label ) {
@@ -52,12 +64,12 @@ function lcp_yeast_seo_render_posts_custom_column( $column, $post_id ) {
 	if ( 'lcp_yeast_seo_title' === $column ) {
 		$custom = trim( (string) get_post_meta( $post_id, LCP_YEAST_SEO_TITLE_META_KEY, true ) );
 		if ( '' !== $custom ) {
-			echo esc_html( $custom ) . wp_kses_post( lcp_yeast_seo_too_long_badge( $custom, 60 ) );
+			echo wp_kses_post( lcp_yeast_seo_clip( $custom ) . lcp_yeast_seo_too_long_badge( $custom, 60 ) );
 		} else {
 			// No custom title: the page falls back to "Post title – Site name"
 			// (WordPress's default pattern), so measure that, not the bare title.
 			$fallback = get_the_title( $post_id ) . ' – ' . get_bloginfo( 'name' );
-			echo '<span style="color:#757575">' . esc_html( get_the_title( $post_id ) ) . '</span>' . wp_kses_post( lcp_yeast_seo_too_long_badge( $fallback, 60 ) );
+			echo wp_kses_post( lcp_yeast_seo_clip( get_the_title( $post_id ), 'color:#757575' ) . lcp_yeast_seo_too_long_badge( $fallback, 60 ) );
 		}
 		$robots = get_post_meta( $post_id, LCP_YEAST_SEO_ROBOTS_META_KEY, true );
 		if ( 'noindex' === $robots ) {
@@ -72,7 +84,7 @@ function lcp_yeast_seo_render_posts_custom_column( $column, $post_id ) {
 	if ( 'lcp_yeast_seo_description' === $column ) {
 		$description = trim( (string) get_post_meta( $post_id, LCP_YEAST_SEO_DESCRIPTION_META_KEY, true ) );
 		if ( '' !== $description ) {
-			echo esc_html( $description ) . wp_kses_post( lcp_yeast_seo_too_long_badge( $description, 160 ) );
+			echo wp_kses_post( lcp_yeast_seo_clip( $description ) . lcp_yeast_seo_too_long_badge( $description, 160 ) );
 		} else {
 			echo '<span aria-hidden="true">&mdash;</span>';
 		}
@@ -171,7 +183,17 @@ function lcp_yeast_seo_admin_column_styles() {
 	if ( ! $screen || empty( $screen->post_type ) || ! in_array( $screen->post_type, lcp_yeast_seo_post_types(), true ) ) {
 		return;
 	}
-	echo '<style>.lcp-yeast-seo-too-long{display:inline-block;margin-left:6px;padding:0 6px;border-radius:10px;background:#b32d2e;color:#fff;font-size:11px;line-height:1.8;white-space:nowrap}.column-lcp_yeast_seo_title{width:18%}.column-lcp_yeast_seo_description{width:22%}.lcp-yeast-seo-schema-status{font-size:18px;font-weight:700;line-height:1}.column-lcp_yeast_seo_schema{width:5%}.column-lcp_yeast_seo_title,.column-lcp_yeast_seo_description{word-wrap:break-word;overflow-wrap:anywhere}</style>';
+	// The columns are sized by their content: WordPress's own fixed layout, plus a share for each added
+	// column, left the Title and any taxonomy columns a few pixels wide on a site with several of them.
+	echo '<style>'
+		. '.wp-list-table.fixed{table-layout:auto}'
+		. '.wp-list-table th.column-title,.wp-list-table td.column-title{min-width:14em}'
+		. '.lcp-yeast-seo-clip{display:inline-block;max-width:14em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom}'
+		. '.lcp-yeast-seo-too-long{display:inline-block;margin-left:6px;padding:0 6px;border-radius:10px;background:#b32d2e;color:#fff;font-size:11px;line-height:1.8;white-space:nowrap}'
+		. '.column-lcp_yeast_seo_title,.column-lcp_yeast_seo_description{width:auto}'
+		. '.column-lcp_yeast_seo_schema{width:4.5em;text-align:center}'
+		. '.lcp-yeast-seo-schema-status{font-size:18px;font-weight:700;line-height:1}'
+		. '</style>';
 }
 function lcp_yeast_seo_register_admin_columns() {
 	foreach ( lcp_yeast_seo_post_types() as $post_type ) {

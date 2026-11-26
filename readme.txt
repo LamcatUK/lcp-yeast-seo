@@ -3,7 +3,7 @@ Tags: seo, schema, sitemap, meta description, open graph
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 0.24.4
+Stable tag: 0.25.0
 
 Per-post SEO controls for titles, descriptions, social tags, canonical URLs and schema, with XML sitemaps. Built to replace Yoast one feature at a time.
 
@@ -33,6 +33,14 @@ After every deploy, run the smoke test against the live site. It checks the site
     LCP_SMOKE_URL=https://example.com LCP_SMOKE_ARCHIVE=/guides/ composer test:smoke
 
 == Changelog ==
+
+= 0.25.0 =
+* New: readable copies of the sitemap, for tools that cannot read XML (some AI assistants reject `application/xml`). Tick "Readable copies" under XML sitemaps. `/sitemap.txt` lists every address, one per line, as `text/plain`. `/sitemap.json` is `application/json`: the site's content types and taxonomies with their terms, then the pages. Add `?type=<content type>` for one type and `&full=1` for whole records (plain-text content and excerpt, dates, taxonomy terms, the custom fields registered for the REST API, and the featured image with its alt text and caption). Long lists are paged (500 short entries or 25 whole records a page) and carry a `next` address.
+* The XML sitemap is not changed. The copies list exactly the pages the XML sitemap lists and leave out anything password protected. They are off until ticked, need no rewrite rules, and are cached for five minutes.
+* Not sent by default: an `X-Robots-Tag: noindex` header, because some tools refuse to read a response marked noindex. `add_filter( 'lcp_yeast_seo_feed_noindex', '__return_true' );` adds it.
+
+= 0.24.5 =
+* Fix: the post and page lists were unreadable on sites with several extra columns (for example custom taxonomies). The Title and those columns were squeezed to a few pixels, so their text wrapped one letter per line, while the SEO Title, Meta Desc. and Schema columns took nearly half the width. The list now sizes its columns by content, keeps the SEO Title and Meta Desc. text to one line with an ellipsis (the whole text shows on hover), and gives Title a sensible minimum. The "too long" and "noindex" badges stay visible beside the text.
 
 = 0.24.4 =
 * Changed: IndexNow is switched off. Many shared hosts have their outgoing address throttled by the search engines, so submitting from the site fails, and the plan is to submit from outside it. The pinging, the queue, the settings card, the button and the dashboard line are dormant; the code is kept in `inc/indexnow.php` and comes back with `add_filter( 'lcp_yeast_seo_indexnow_feature', '__return_true' );`. Your IndexNow setting is kept while it is off.

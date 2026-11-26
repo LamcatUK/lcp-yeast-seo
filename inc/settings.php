@@ -68,6 +68,7 @@ function lcp_yeast_seo_sanitize_settings( $input ) {
 		'sitemap_post_types'        => lcp_yeast_seo_sanitize_sitemap_post_types( $input['sitemap_post_types'] ?? array() ),
 		'sitemap_taxonomies'        => lcp_yeast_seo_sanitize_sitemap_taxonomies( $input['sitemap_taxonomies'] ?? array() ),
 		'sitemap_images'            => empty( $input['sitemap_images'] ) ? '0' : '1',
+		'readable_sitemaps'         => empty( $input['readable_sitemaps'] ) ? '0' : '1',
 		'auto_schema'               => empty( $input['auto_schema'] ) ? '0' : '1',
 		'auto_schema_kinds'         => lcp_yeast_seo_sanitize_auto_schema_kinds( $input['auto_schema_kinds'] ?? array() ),
 		'robots_txt'                => lcp_yeast_seo_sanitize_robots_setting( $input ),
@@ -443,6 +444,14 @@ function lcp_yeast_seo_register_settings_page() {
 		'sitemap_images',
 		'Images',
 		'lcp_yeast_seo_render_sitemap_images_field',
+		'lcp-yeast-seo',
+		'lcp_yeast_seo_sitemaps'
+	);
+
+	add_settings_field(
+		'readable_sitemaps',
+		'Readable copies',
+		'lcp_yeast_seo_render_readable_sitemaps_field',
 		'lcp-yeast-seo',
 		'lcp_yeast_seo_sitemaps'
 	);
